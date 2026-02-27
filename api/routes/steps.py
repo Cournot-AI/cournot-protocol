@@ -83,7 +83,7 @@ class ResolveRequest(BaseModel):
     tool_plan: dict[str, Any] = Field(
         ..., description="Tool execution plan (from /step/prompt output)"
     )
-    collectors: list[Literal["CollectorLLM", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorGeminiGrounded", "CollectorCRP"]] = Field(
+    collectors: list[Literal["CollectorLLM", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorGeminiGrounded", "CollectorGeminiGroundedStrict", "CollectorCRP"]] = Field(
         default=["CollectorLLM"],
         description="Which collector agents to use (runs all in sequence)",
         min_length=1,
@@ -134,7 +134,7 @@ class CollectRequest(BaseModel):
     tool_plan: dict[str, Any] = Field(
         ..., description="Tool execution plan (from /step/prompt)"
     )
-    collectors: list[Literal["CollectorLLM", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorGeminiGrounded", "CollectorCRP"]] = Field(
+    collectors: list[Literal["CollectorLLM", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorGeminiGrounded", "CollectorGeminiGroundedStrict", "CollectorCRP"]] = Field(
         default=["CollectorLLM"],
         description="Which collector agents to use (runs all in sequence)",
         min_length=1,
@@ -613,6 +613,9 @@ async def run_collect(request: CollectRequest) -> CollectResponse:
                 elif collector_name == "CollectorGeminiGrounded":
                     from agents.collector.gemini_grounded_agent import CollectorGeminiGrounded
                     collector = CollectorGeminiGrounded()
+                elif collector_name == "CollectorGeminiGroundedStrict":
+                    from agents.collector.gemini_grounded_strict_agent import CollectorGeminiGroundedStrict
+                    collector = CollectorGeminiGroundedStrict()
                 elif collector_name == "CollectorCRP":
                     from agents.collector.crp_agent import CollectorCRP
                     collector = CollectorCRP()

@@ -145,6 +145,47 @@ Replay evidence collection and verify against original pack.
 }
 ```
 
+### Capabilities
+
+```bash
+GET /capabilities
+```
+
+Discover available agents and configured LLM providers. Only providers with API keys set in the server environment are returned — no secrets are exposed. Use this to populate provider/model dropdowns in a frontend or to check what collectors are available before calling `/step/collect`.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "providers": [
+    { "provider": "openai", "default_model": "gpt-4o" },
+    { "provider": "anthropic", "default_model": "claude-sonnet-4-20250514" },
+    { "provider": "google", "default_model": "gemini-2.5-flash" },
+    { "provider": "grok", "default_model": "grok-3" }
+  ],
+  "steps": [
+    {
+      "step": "prompt_engineer",
+      "agents": [
+        { "name": "PromptEngineerLLM", "description": "...", "version": "v1", "capabilities": ["llm"], "priority": 100, "is_fallback": false },
+        { "name": "PromptEngineerFallback", "description": "...", "version": "v1", "capabilities": ["deterministic"], "priority": 0, "is_fallback": true }
+      ]
+    },
+    {
+      "step": "collector",
+      "agents": [
+        { "name": "CollectorLLM", "description": "...", "version": "v1", "capabilities": ["llm", "network"], "priority": 180, "is_fallback": false },
+        { "name": "CollectorCRP", "description": "...", "version": "v1", "capabilities": ["llm", "network"], "priority": 195, "is_fallback": false },
+        { "name": "CollectorHyDE", "description": "...", "version": "v1", "capabilities": ["llm", "network"], "priority": 190, "is_fallback": false }
+      ]
+    },
+    { "step": "auditor", "agents": [ "..." ] },
+    { "step": "judge", "agents": [ "..." ] },
+    { "step": "sentinel", "agents": [ "..." ] }
+  ]
+}
+```
+
 ### Step: Prompt Engineer
 
 ```bash
@@ -331,6 +372,12 @@ Error codes:
 - `INTERNAL_ERROR` - Internal server error
 
 ## Examples
+
+### cURL - Capabilities
+
+```bash
+curl -s http://localhost:8000/capabilities | python3 -m json.tool
+```
 
 ### cURL - Run Pipeline
 
@@ -579,6 +626,24 @@ Response (`bundle_out.json`):
 }
 ```
 
+### Python - Capabilities
+
+```python
+import httpx
+
+resp = httpx.get("http://localhost:8000/capabilities").json()
+
+# List configured LLM providers
+for p in resp["providers"]:
+    print(f"  {p['provider']} (default: {p['default_model']})")
+
+# List available collectors
+for step in resp["steps"]:
+    if step["step"] == "collector":
+        for agent in step["agents"]:
+            print(f"  {agent['name']} (priority={agent['priority']}, fallback={agent['is_fallback']})")
+```
+
 ### Python - Step-by-step flow
 
 ```python
@@ -701,5 +766,6 @@ api/
     ├── run.py         # Pipeline execution
     ├── steps.py       # Individual step execution (prompt, collect, audit, judge, bundle, resolve)
     ├── verify.py      # Pack verification
-    └── replay.py      # Evidence replay
+    ├── replay.py      # Evidence replay
+    └── capabilities.py # Agent/provider discovery
 ```
