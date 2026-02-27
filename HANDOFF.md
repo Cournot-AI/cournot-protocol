@@ -1,61 +1,122 @@
-# Handoff: CollectorGeminiGroundedStrict v3 — FotMob Direct Extraction
+# Handoff: Generalized Site Extractor Registry
 
 ## Goal
-Make `CollectorGeminiGroundedStrict` reliably find and cite required-domain pages (e.g. fotmob.com) by adding Serper URL discovery, Gemini UrlContext, and **deterministic stat extraction from FotMob match pages**.
+Replace the hardcoded FotMob-only Phase 1.5 with a pluggable extractor registry, and add FBRef as the second extractor using the `soccerdata` library.
 
 ## Current State
-- **Strict collector upgraded to v3** with three-phase approach:
+- **Strict collector** with three-phase approach:
   1. **Phase 1: Serper pre-search** — uses LLM-generated discovery query (`_generate_discovery_query`) to find top 3 URLs on the required domain via `google.serper.dev/search`.
-  2. **Phase 1.5: FotMob direct extraction** (NEW) — if a discovered URL matches `fotmob.com/matches/*`, fetches the HTML page and extracts stats from the `__NEXT_DATA__` JSON (Next.js SSR data). Resolves the market directly without Gemini. **Deterministic and reliable.**
+  2. **Phase 1.5: Extractor registry dispatch + LLM resolution** — loops through discovered URLs, finds a matching `SiteExtractor` via `find_extractor()`, fetches structured data, builds a text summary, then asks Gemini to resolve. Currently supports **FotMob** and **FBRef**.
   3. **Phase 2: Gemini UrlContext + GoogleSearch** — fallback if Phase 1.5 is not applicable or fails. Passes discovered URLs to Gemini via `UrlContext` tool for full page ingestion.
-- **50 tests pass** (48 new code + 2 pre-existing failures from missing `google.genai` module).
-- **Live result**: Serper finds correct fotmob.com match page. Direct extraction gets **Shots outside box = 8** (Real Madrid, away team). Market correctly resolved as "Yes" (8 >= 5). Confidence 0.95.
+- **93 tests pass** across 5 test files:
+  - `test_fotmob.py` (31 tests) — FotMob data extraction
+  - `test_collector_gemini_grounded_strict.py` (40 tests) — strict agent behavior
+  - `test_extractor_registry.py` (8 tests) — registry + FotMobExtractor
+  - `test_fbref_extractor.py` (12 tests) — FBRefExtractor
+  - `test_fotmob_live.py` (2 tests) — live FotMob fetch
+- **End-to-end API pipeline verified** for both stat-based and event-based markets.
+- **Branch:** `feat/extractor-registry` (6 commits)
 
-## Key Finding: `__NEXT_DATA__` Solves JS-Rendering Problem
-FotMob is a Next.js app. The HTML page embeds ALL match data (496KB JSON) in a `<script id="__NEXT_DATA__">` tag. A plain HTTP GET with browser headers returns this data — no Cloudflare challenge, no JS rendering needed. All 7 stat categories (top_stats, shots, expected_goals, passes, defence, duels, discipline) are present.
+## What Changed This Session: Extractor Registry
 
-## Files Changed (this session)
-- `agents/collector/fotmob.py` — NEW: FotMob stat extractor module with `fetch_match_stats()`, `find_stat()`, `match_team()`, dataclasses (`FotMobMatchData`, `FotMobStat`, `FotMobExtractionError`)
-- `agents/collector/gemini_grounded_strict_agent.py` — v2→v3: added `_try_fotmob_direct_extraction()` method, Phase 1.5 block in `_collect_requirement()`, fotmob imports
-- `tests/test_fotmob.py` — NEW: 16 unit tests for fotmob module (fetch, find_stat, match_team)
-- `tests/test_fotmob_live.py` — NEW: 2 live integration tests against real fotmob.com
-- `tests/test_collector_gemini_grounded_strict.py` — added 4 tests for fotmob direct extraction (TestFotMobDirectExtraction)
-- `docs/plans/2026-02-27-fotmob-extractor-design.md` — design document
-- `docs/plans/2026-02-27-fotmob-extractor-plan.md` — implementation plan
+### Problem
+Phase 1.5 was hardcoded to FotMob only (`_try_fotmob_direct_extraction`). Adding new data sources required modifying the strict agent directly. The "Next Steps" from the prior session called for generalizing beyond FotMob.
 
-## Test Market for Next Session
+### Solution
+Introduced a `SiteExtractor` ABC and a registry pattern:
 
-Run the full API pipeline (step-by-step flow from `api/README.md`) with `CollectorGeminiGroundedStrict` to verify end-to-end resolution.
+1. **`agents/collector/extractors/base.py`** — `SiteExtractor` ABC with `can_handle(url)`, `extract_and_summarize(url, http_client)`, and `source_id` property. Plus `ExtractionError` exception.
 
-**Market:** "Will Real Madrid make 5+ shots outside box vs Osasuna on Feb 21?"
+2. **`agents/collector/extractors/__init__.py`** — Registry with `find_extractor(url)` that loops through registered extractors and returns the first match, or `None`.
 
-**Expected result:**
-- Serper discovers: `https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz`
-- Phase 1.5 extracts: Shots outside box = 8 (Real Madrid, away)
-- Resolution: **Yes** (8 >= 5), confidence 0.95, tier 1
+3. **`agents/collector/extractors/fotmob_ext.py`** — `FotMobExtractor` wrapping existing `fotmob.py` (`fetch_match_stats` + `summarize_for_llm`). Returns `(summary_text, metadata_dict)`.
 
-**How to run (step-by-step via API):**
+4. **`agents/collector/extractors/fbref_ext.py`** — `FBRefExtractor` using `soccerdata` library. Parses game ID from URL, infers league/season, fetches player stats + shot events via `soccerdata.FBref`, builds text summary.
+
+5. **`agents/collector/gemini_grounded_strict_agent.py`** — Replaced `_try_fotmob_direct_extraction` with `_try_direct_extraction` that uses `find_extractor()` dispatch. Removed direct fotmob imports.
+
+### Architecture
+
+```
+agents/collector/extractors/
+├── __init__.py          # Registry: find_extractor(url) -> SiteExtractor | None
+├── base.py              # SiteExtractor ABC, ExtractionError
+├── fotmob_ext.py        # FotMobExtractor (wraps fotmob.py)
+└── fbref_ext.py         # FBRefExtractor (soccerdata library)
+```
+
+The registry is a simple list of `SiteExtractor` instances. `find_extractor(url)` iterates and returns the first extractor whose `can_handle(url)` returns `True`.
+
+### How to Add a New Extractor
+
+1. Create `agents/collector/extractors/mysite_ext.py`:
+   ```python
+   from .base import SiteExtractor, ExtractionError
+
+   class MySiteExtractor(SiteExtractor):
+       source_id = "mysite"
+
+       def can_handle(self, url: str) -> bool:
+           return "mysite.com/" in url
+
+       def extract_and_summarize(self, url, http_client):
+           # Fetch data, build text summary
+           summary = "..."
+           metadata = {"source_url": url, ...}
+           return summary, metadata
+   ```
+
+2. Register in `agents/collector/extractors/__init__.py`:
+   ```python
+   from .mysite_ext import MySiteExtractor
+   _REGISTRY.append(MySiteExtractor())
+   ```
+
+3. Add tests in `tests/test_mysite_extractor.py`.
+
+### Files Changed
+- **New:** `agents/collector/extractors/` — package with `base.py`, `__init__.py`, `fotmob_ext.py`, `fbref_ext.py`
+- **Modified:** `agents/collector/gemini_grounded_strict_agent.py` — replaced `_try_fotmob_direct_extraction` → `_try_direct_extraction`; imports changed from `fotmob` to `extractors`
+- **Modified:** `tests/test_collector_gemini_grounded_strict.py` — updated `TestFotMobDirectExtraction` to mock `find_extractor`; added `TestGenericDirectExtraction` (4 tests)
+- **New:** `tests/test_extractor_registry.py` — 8 tests for registry + FotMobExtractor
+- **New:** `tests/test_fbref_extractor.py` — 12 tests for FBRefExtractor
+
+## FBRef Extractor Details
+
+The `FBRefExtractor` uses the `soccerdata` library (v1.8.8) to fetch data from fbref.com:
+
+- **URL parsing:** `_parse_game_id(url)` extracts hex game ID from `fbref.com/en/matches/{id}/...`
+- **League inference:** `_infer_league_season(url)` maps URL slugs (`Premier-League` → `ENG-Premier League`) and infers season from date in URL
+- **Data fetching:** `_create_fbref_client(league, season)` creates `soccerdata.FBref` instance; fetches `read_player_match_stats(stat_type="summary")` and `read_shot_events()`
+- **Summary:** `_summarize_player_stats(df)` and `_summarize_shot_events(df)` build text sections
+
+Supported leagues: Premier League, La Liga, Serie A, Bundesliga, Ligue 1.
+
+## Key Findings (carried forward)
+
+### `__NEXT_DATA__` Solves JS-Rendering Problem
+FotMob is a Next.js app. The HTML page embeds ALL match data (496KB JSON) in a `<script id="__NEXT_DATA__">` tag. A plain HTTP GET with browser headers returns this data — no Cloudflare challenge, no JS rendering needed.
+
+**Important:** The `Accept-Encoding` header must NOT include `br` (brotli) when using the `requests` library without the brotli package installed.
+
+### FotMob Two-Leg Match Pages
+For Champions League knockout ties, FotMob uses a **single URL** for both legs. The SSR `__NEXT_DATA__` always contains the **second leg** data. First-leg markets fall through to Phase 2 Gemini.
+
+## How to Run a Market (step-by-step via API)
 
 ```bash
 # 1. Start the API server
 uvicorn api.app:app --reload --host 0.0.0.0 --port 8000
 
-# 2. Step 1: Prompt — compile the market query
-#    NOTE: The prompt engineer must produce a PromptSpec with:
-#    - source_targets pointing to fotmob.com
-#    - expected_fields: ["Shots outside box"]
-#    - prediction_semantics.target_entity: "Real Madrid"
-#    - prediction_semantics.threshold: "5"
-#    If the LLM prompt engineer doesn't produce these fields correctly,
-#    you may need to manually construct or patch the prompt_spec.
+# 2. Prompt — compile the market query
 curl -s -X POST http://localhost:8000/step/prompt \
   -H "Content-Type: application/json" \
   -d '{
-    "user_input": "Will Real Madrid make 5+ shots outside box vs Osasuna on Feb 21?\n\nThis market will resolve to YES if Real Madrid records 5 or more shots outside the box during the La Liga match against Osasuna scheduled for February 21, 2026, 17:30 UTC. Otherwise, it will resolve to NO.\n\nThe shots outside the box count will be determined using Real Madrid'\''s Shots outside box value shown on https://www.fotmob.com/ on the match page under Top stats -> Shots for this specific game.\n\nIf the match is not played and completed with an official result by March 21, 2026, 23:59 UTC, the market will resolve to NO.",
+    "user_input": "Will Arsenal score from a corner against Brentford on Feb 12?\n\nThis market will resolve to YES if Arsenal scores at least one goal officially designated as originating from a corner kick situation in their Premier League match against Brentford scheduled for February 12, 2026, 20:00 UTC. Otherwise, this market will resolve to NO.\n\nThe goal must be recorded in Fotmob'\''s shot map data with the situation labeled as from corner and the result as goal.",
     "strict_mode": true
   }' -o prompt_out.json
 
-# 3. Step 2: Collect — use CollectorGeminiGroundedStrict
+# 3. Collect
 curl -s -X POST http://localhost:8000/step/collect \
   -H "Content-Type: application/json" \
   -d "$(python3 -c "
@@ -69,7 +130,7 @@ print(json.dumps({
 }))
 ")" -o collect_out.json
 
-# 4. Check the collect output for fotmob direct extraction
+# 4. Check collect output
 python3 -c "
 import json
 r = json.load(open('collect_out.json'))
@@ -78,34 +139,69 @@ for bundle in r.get('evidence_bundles', []):
         ef = item.get('extracted_fields', {})
         print(f'outcome: {ef.get(\"outcome\")}')
         print(f'direct_extraction: {ef.get(\"direct_extraction\")}')
-        print(f'fotmob_stat_title: {ef.get(\"fotmob_stat_title\")}')
-        print(f'fotmob_stat_value: {ef.get(\"fotmob_stat_value\")}')
+        print(f'resolution_method: {ef.get(\"resolution_method\")}')
+        print(f'extractor_source_id: {ef.get(\"extractor_source_id\")}')
         print(f'confidence: {ef.get(\"confidence_score\")}')
 "
 
-# 5. Continue with audit → judge → bundle as in api/README.md
+# 5. Audit → Judge → Bundle (same pattern as before)
+curl -s -X POST http://localhost:8000/step/audit \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c "
+import json
+prompt = json.load(open('prompt_out.json'))
+collect = json.load(open('collect_out.json'))
+print(json.dumps({
+    'prompt_spec': prompt['prompt_spec'],
+    'evidence_bundles': collect['evidence_bundles']
+}))
+")" -o audit_out.json
+
+curl -s -X POST http://localhost:8000/step/judge \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c "
+import json
+prompt = json.load(open('prompt_out.json'))
+collect = json.load(open('collect_out.json'))
+audit = json.load(open('audit_out.json'))
+print(json.dumps({
+    'prompt_spec': prompt['prompt_spec'],
+    'evidence_bundles': collect['evidence_bundles'],
+    'reasoning_trace': audit['reasoning_trace']
+}))
+")" -o judge_out.json
+
+curl -s -X POST http://localhost:8000/step/bundle \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c "
+import json
+prompt = json.load(open('prompt_out.json'))
+collect = json.load(open('collect_out.json'))
+audit = json.load(open('audit_out.json'))
+judge = json.load(open('judge_out.json'))
+print(json.dumps({
+    'prompt_spec': prompt['prompt_spec'],
+    'evidence_bundles': collect['evidence_bundles'],
+    'reasoning_trace': audit['reasoning_trace'],
+    'verdict': judge['verdict']
+}))
+")" -o bundle_out.json
 ```
 
-**Key requirement for Phase 1.5 to activate:**
-The PromptSpec must have:
-1. `data_requirements[].source_targets[].uri` containing `fotmob.com`
-2. `data_requirements[].expected_fields` containing `"Shots outside box"`
-3. `prediction_semantics.target_entity` = `"Real Madrid"`
-4. `prediction_semantics.threshold` = `"5"`
+## Key Requirements for Phase 1.5 to Activate
 
-If the LLM prompt engineer doesn't produce these fields, the fotmob direct extraction will not fire and it will fall back to Gemini Phase 2.
+1. A discovered URL matches a registered `SiteExtractor` via `find_extractor(url)`
+2. The extractor's `extract_and_summarize()` succeeds (no `ExtractionError`)
+3. Gemini LLM call succeeds and returns valid `{"outcome": "Yes/No", "reason": "..."}`
 
-## Resolved Issues
-1. ~~Non-deterministic stat values~~ — RESOLVED for fotmob markets via direct `__NEXT_DATA__` extraction
-2. ~~JS-rendered sub-stats invisible~~ — RESOLVED via `__NEXT_DATA__` JSON
-3. ~~Playwright needed~~ — NOT NEEDED
+If any step fails, Phase 1.5 returns `None` and the collector falls through to Phase 2 Gemini.
 
 ## Remaining Issues
-1. **`google.genai` not installed locally** — 2 tests fail (pre-existing)
-2. **FotMob-only** — direct extraction only works for fotmob.com
-3. **Prompt engineer dependency** — the LLM prompt engineer must produce the right `source_targets`, `expected_fields`, `target_entity`, and `threshold` for Phase 1.5 to activate. If it doesn't, need to verify/patch the prompt_spec manually.
+1. **FBRef not yet tested end-to-end** — the FBRefExtractor is implemented and unit-tested with mocks, but has not been tested against the live API pipeline. Need to verify `soccerdata` fetches work in production.
+2. **Two-leg matches** — FotMob only serves second-leg data via SSR `__NEXT_DATA__`. First-leg markets cannot use Phase 1.5.
+3. **Rate limiting** — `soccerdata` scrapes fbref.com directly; may hit rate limits under heavy use.
 
 ## Next Steps
-1. **Test end-to-end via API** — run the step-by-step flow above with `CollectorGeminiGroundedStrict` and verify the collect step returns `direct_extraction: true` with `fotmob_stat_value: 8`.
-2. **Verify prompt engineer output** — check that the LLM prompt engineer produces the right fields for fotmob markets. If not, consider adding fotmob-specific hints to the prompt engineer.
-3. **LLM fallback for stat field identification** — when `expected_fields` is empty, use LLM to derive the stat name from the market question.
+- **Test FBRef end-to-end** — run a market with `fbref.com` as the data source via the API pipeline.
+- **Add more extractors** — the registry pattern makes it straightforward to add extractors for other domains (e.g. Transfermarkt, ESPN, CoinGecko for non-football markets).
+- **Prompt agent integration** — teach the prompt agent to suggest `fbref.com` as a `source_target` for markets that reference FBRef data.
