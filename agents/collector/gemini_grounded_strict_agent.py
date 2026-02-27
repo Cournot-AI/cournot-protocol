@@ -467,6 +467,8 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
         try:
             data_summary, ext_metadata = extractor.extract_and_summarize(
                 match_url, ctx.http,
+                gemini_client=client,
+                gemini_model=self._model,
             )
         except ExtractionError as e:
             ctx.warning(

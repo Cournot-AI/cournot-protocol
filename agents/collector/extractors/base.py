@@ -22,13 +22,15 @@ class SiteExtractor(ABC):
 
     @abstractmethod
     def extract_and_summarize(
-        self, url: str, http_client: Any,
+        self, url: str, http_client: Any, **kwargs: Any,
     ) -> tuple[str, dict[str, Any]]:
         """Fetch structured data and return (summary_text, metadata).
 
         Args:
             url: The discovered URL to extract data from.
             http_client: An httpx-compatible HTTP client.
+            **kwargs: Optional extra context. Extractors that need an
+                LLM can accept ``gemini_client`` and ``gemini_model``.
 
         Returns:
             Tuple of (text_summary, metadata_dict).

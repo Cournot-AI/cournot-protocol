@@ -24,7 +24,7 @@ class FotMobExtractor(SiteExtractor):
         return "fotmob.com/matches/" in url
 
     def extract_and_summarize(
-        self, url: str, http_client: Any,
+        self, url: str, http_client: Any, **kwargs: Any,
     ) -> tuple[str, dict[str, Any]]:
         try:
             match_data = fotmob_fetch_match_stats(url, http_client)
