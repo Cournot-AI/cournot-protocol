@@ -48,13 +48,8 @@ from .gemini_grounded_agent import (
     CollectorGeminiGrounded,
 )
 
-from .fotmob import (
-    FotMobExtractionError,
-    FotMobMatchData,
-    fetch_match_stats as fotmob_fetch_match_stats,
-    find_stat as fotmob_find_stat,
-    match_team as fotmob_match_team,
-)
+from .extractors import find_extractor
+from .extractors.base import ExtractionError
 
 if TYPE_CHECKING:
     from agents.context import AgentContext
@@ -425,117 +420,134 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
         return discovered
 
     # ------------------------------------------------------------------
-    # FotMob direct extraction (Phase 1.5)
+    # Direct extraction via extractor registry (Phase 1.5)
     # ------------------------------------------------------------------
 
-    def _try_fotmob_direct_extraction(
+    def _try_direct_extraction(
         self,
         ctx: "AgentContext",
+        client: Any,
         prompt_spec: PromptSpec,
         requirement: "DataRequirement",
         discovered_urls: list[dict[str, str]],
     ) -> tuple[str, str, dict[str, Any]] | None:
-        """Try direct stat extraction from a FotMob match page.
+        """Try LLM-based resolution using structured data from a site extractor.
 
-        Returns ``(outcome, reason, metadata)`` on success, or ``None``
-        if extraction is not possible or fails.
+        Loops through discovered URLs, finds a matching extractor, fetches
+        structured data, builds a text summary, then asks Gemini to resolve.
+
+        Returns ``(outcome, reason, metadata)`` on success, or ``None``.
         """
-        # Find a fotmob match URL among discovered URLs
+        # Find a matching extractor among discovered URLs
+        extractor = None
         match_url = None
         for entry in discovered_urls:
             url = entry.get("url", "")
-            if "fotmob.com/matches/" in url:
+            ext = find_extractor(url)
+            if ext is not None:
+                extractor = ext
                 match_url = url
                 break
 
-        if not match_url:
+        if extractor is None or match_url is None:
             return None
 
         if not ctx.http:
-            ctx.info("[GeminiGroundedStrict] No HTTP client for fotmob extraction")
+            ctx.info("[GeminiGroundedStrict] No HTTP client for direct extraction")
             return None
 
-        ctx.info(f"[GeminiGroundedStrict] Attempting fotmob direct extraction: {match_url}")
+        import concurrent.futures
+        from google.genai import types
 
-        try:
-            match_data = fotmob_fetch_match_stats(match_url, ctx.http)
-        except FotMobExtractionError as e:
-            ctx.warning(f"[GeminiGroundedStrict] FotMob extraction failed: {e}")
-            return None
-
-        # Determine which stat to look for
-        stat_titles = requirement.expected_fields or []
-        stat = None
-        used_title = ""
-        for title in stat_titles:
-            stat = fotmob_find_stat(match_data, title)
-            if stat:
-                used_title = title
-                break
-
-        if not stat:
-            ctx.info(
-                f"[GeminiGroundedStrict] Stat not found in fotmob data "
-                f"(tried: {stat_titles})"
-            )
-            return None
-
-        # Determine which team's value to use
-        target = prompt_spec.prediction_semantics.target_entity
-        side = fotmob_match_team(match_data, target)
-        if not side:
-            ctx.info(
-                f"[GeminiGroundedStrict] Could not match entity {target!r} "
-                f"to {match_data.home_team} / {match_data.away_team}"
-            )
-            return None
-
-        value = stat.home_value if side == "home" else stat.away_value
-
-        # Resolve against threshold
-        threshold_str = prompt_spec.prediction_semantics.threshold
-        try:
-            threshold = float(threshold_str) if threshold_str else None
-        except (ValueError, TypeError):
-            threshold = None
-
-        if threshold is not None:
-            try:
-                numeric_value = float(value)
-            except (ValueError, TypeError):
-                ctx.info(
-                    f"[GeminiGroundedStrict] Non-numeric stat value: {value!r}"
-                )
-                return None
-            outcome = "Yes" if numeric_value >= threshold else "No"
-        else:
-            outcome = "Yes"
-            numeric_value = value
-
-        team_name = match_data.home_team if side == "home" else match_data.away_team
-        reason = (
-            f"{team_name} had {value} {stat.title.lower()} "
-            f"(vs threshold {threshold_str}). "
-            f"Source: fotmob.com match page {match_url}"
+        ctx.info(
+            f"[GeminiGroundedStrict] Attempting {extractor.source_id} "
+            f"direct extraction: {match_url}"
         )
+
+        try:
+            data_summary, ext_metadata = extractor.extract_and_summarize(
+                match_url, ctx.http,
+            )
+        except ExtractionError as e:
+            ctx.warning(
+                f"[GeminiGroundedStrict] {extractor.source_id} extraction failed: {e}"
+            )
+            return None
+
+        # Build LLM prompt (domain-agnostic)
+        market = prompt_spec.market
+        semantics = prompt_spec.prediction_semantics
+
+        rules_lines: list[str] = []
+        rules_lines.append(f"Event definition: {market.event_definition}")
+        for rule in market.resolution_rules.get_sorted_rules():
+            rules_lines.append(f"- [{rule.rule_id}] {rule.description}")
+        rules_text = "\n".join(rules_lines)
+
+        llm_prompt = (
+            f"You are resolving a prediction market using official data "
+            f"from {extractor.source_id}.\n\n"
+            f"Market question: {market.question}\n\n"
+            f"Resolution rules:\n{rules_text}\n\n"
+            f"Target entity: {semantics.target_entity}\n"
+            f"Predicate: {semantics.predicate}\n"
+            f"Threshold: {semantics.threshold or 'N/A'}\n\n"
+            f"=== DATA (from {extractor.source_id}) ===\n"
+            f"{data_summary}\n"
+            f"=== END DATA ===\n\n"
+            "Based ONLY on the data above, resolve this market.\n"
+            "You MUST respond with ONLY a JSON object, no markdown fences:\n"
+            '{"outcome": "Yes or No", "reason": "Brief explanation citing specific data"}\n'
+        )
+
+        ctx.info(
+            f"[GeminiGroundedStrict] Calling LLM for {extractor.source_id} "
+            f"data interpretation"
+        )
+
+        def _do_call() -> Any:
+            return client.models.generate_content(
+                model=self._model,
+                contents=llm_prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                ),
+            )
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_do_call)
+                response = future.result(timeout=30)
+        except Exception as e:
+            ctx.warning(
+                f"[GeminiGroundedStrict] {extractor.source_id} LLM call failed: {e}"
+            )
+            return None
+
+        text = self._extract_text(response)
+        parsed = self._parse_json(text)
+        parsed = self._normalize_parsed(parsed)
+
+        outcome = parsed.get("outcome", "")
+        reason = parsed.get("reason", "")
+
+        if outcome.lower() not in ("yes", "no"):
+            ctx.warning(
+                f"[GeminiGroundedStrict] {extractor.source_id} LLM returned "
+                f"invalid outcome: {outcome!r}"
+            )
+            return None
 
         metadata = {
             "direct_extraction": True,
-            "fotmob_url": match_url,
-            "fotmob_match_id": match_data.match_id,
-            "fotmob_stat_title": stat.title,
-            "fotmob_stat_key": stat.key,
-            "fotmob_stat_value": value,
-            "fotmob_home_team": match_data.home_team,
-            "fotmob_away_team": match_data.away_team,
-            "fotmob_home_value": stat.home_value,
-            "fotmob_away_value": stat.away_value,
-            "fotmob_target_side": side,
+            "resolution_method": "llm_with_structured_data",
+            "extractor_source_id": extractor.source_id,
+            **ext_metadata,
         }
 
         ctx.info(
-            f"[GeminiGroundedStrict] FotMob direct extraction SUCCESS: "
-            f"{stat.title} = {value} ({team_name}), outcome = {outcome}"
+            f"[GeminiGroundedStrict] {extractor.source_id} LLM resolution SUCCESS: "
+            f"outcome={outcome}, reason={reason[:100]}"
         )
 
         return outcome, reason, metadata
@@ -597,30 +609,37 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
             )
             record.input["discovered_urls"] = [u["url"] for u in discovered_urls]
 
-            # --- Phase 1.5: FotMob direct extraction ---
-            fotmob_result = self._try_fotmob_direct_extraction(
-                ctx, prompt_spec, requirement, discovered_urls,
+            # --- Phase 1.5: Direct extraction via extractor registry ---
+            extraction_result = self._try_direct_extraction(
+                ctx, client, prompt_spec, requirement, discovered_urls,
             )
-            if fotmob_result is not None:
-                outcome, reason, fotmob_meta = fotmob_result
+            if extraction_result is not None:
+                outcome, reason, ext_meta = extraction_result
+                source_id = ext_meta.get("extractor_source_id", "direct")
+                # Find the URL used for extraction from metadata
+                ext_url = (
+                    ext_meta.get("fotmob_url")
+                    or ext_meta.get("source_url")
+                    or f"extractor:{source_id}"
+                )
                 combined_text = json.dumps({"outcome": outcome, "reason": reason})
                 record.ended_at = ctx.now().isoformat()
                 record.output = {
                     "outcome": outcome,
-                    "method": "fotmob_direct_extraction",
+                    "method": f"{source_id}_direct_extraction",
                     "data_source_covered": True,
                     "attempts_made": 0,
                     "strict_mode": True,
                     "serper_discovered_urls": [u["url"] for u in discovered_urls],
-                    **fotmob_meta,
+                    **ext_meta,
                 }
 
                 return EvidenceItem(
                     evidence_id=evidence_id,
                     requirement_id=req_id,
                     provenance=Provenance(
-                        source_id="fotmob_direct",
-                        source_uri=fotmob_meta["fotmob_url"],
+                        source_id=f"{source_id}_direct",
+                        source_uri=ext_url,
                         tier=1,
                         fetched_at=ctx.now(),
                         content_hash=hashlib.sha256(combined_text.encode()).hexdigest(),
@@ -631,20 +650,20 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                         "outcome": outcome,
                         "reason": reason,
                         "evidence_sources": [{
-                            "url": fotmob_meta["fotmob_url"],
-                            "source_id": "fotmob.com",
+                            "url": ext_url,
+                            "source_id": f"{source_id}.com",
                             "credibility_tier": 1,
                             "key_fact": reason,
                             "supports": outcome,
                             "is_required_data_source": True,
                         }],
-                        "confidence_score": 0.95,
+                        "confidence_score": 0.90,
                         "resolution_status": "RESOLVED",
                         "data_source_covered": True,
                         "data_source_domains_required": [d["domain"] for d in required_domains],
                         "strict_mode": True,
                         "serper_discovered_urls": [u["url"] for u in discovered_urls],
-                        **fotmob_meta,
+                        **ext_meta,
                     },
                     success=True,
                 ), record

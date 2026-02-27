@@ -7,16 +7,26 @@ the two-phase approach: Serper URL discovery → Gemini UrlContext+GoogleSearch.
 """
 
 import json
+import sys
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch, call
+
+# Ensure google.genai can be imported even when the package isn't installed.
+# Several methods import it lazily; tests mock the client so the real SDK
+# is never needed, but the import must not raise ModuleNotFoundError.
+if "google.genai" not in sys.modules:
+    _genai_mock = MagicMock()
+    sys.modules.setdefault("google", MagicMock())
+    sys.modules["google.genai"] = _genai_mock
+    sys.modules["google.genai.types"] = _genai_mock.types
 
 from agents.context import AgentContext
 from agents.collector.gemini_grounded_strict_agent import (
     CollectorGeminiGroundedStrict,
     _build_strict_prompt,
 )
-from agents.collector.fotmob import FotMobMatchData, FotMobStat
+from agents.collector.fotmob import FotMobMatchData, FotMobStat, FotMobShot, FotMobEvent
 from core.schemas import (
     DataRequirement,
     EvidenceBundle,
@@ -788,6 +798,8 @@ def _make_fotmob_match_data() -> FotMobMatchData:
         home_team="Osasuna",
         away_team="Real Madrid",
         url="https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
+        home_score=0,
+        away_score=4,
         stats_by_category={
             "shots": [
                 FotMobStat(title="Total shots", key="total_shots",
@@ -796,7 +808,32 @@ def _make_fotmob_match_data() -> FotMobMatchData:
                            home_value=2, away_value=8, category="shots"),
             ],
         },
+        shots=[
+            FotMobShot(event_type="Goal", team_id=8633, player_name="Vinicius Jr",
+                       situation="OpenPlay", shot_type="LeftFoot", minute=12,
+                       expected_goals=0.45, is_home=False, on_target=True),
+        ],
+        events=[
+            FotMobEvent(type="Goal", time=12, overload_time=None, is_home=False,
+                        player_name="Vinicius Jr", assist_player="Bellingham"),
+        ],
+        event_types=["Goal"],
     )
+
+
+def _mock_llm_response(outcome: str = "Yes", reason: str = "8 shots outside box found"):
+    """Build a mock Gemini LLM response for Phase 1.5 (no tools)."""
+    part = MagicMock()
+    part.text = json.dumps({"outcome": outcome, "reason": reason})
+    content = MagicMock()
+    content.parts = [part]
+    candidate = MagicMock()
+    candidate.content = content
+    candidate.url_context_metadata = None
+    candidate.grounding_metadata = None
+    response = MagicMock()
+    response.candidates = [candidate]
+    return response
 
 
 def _create_shots_spec() -> PromptSpec:
@@ -852,19 +889,23 @@ def _create_shots_spec() -> PromptSpec:
 
 
 class TestFotMobDirectExtraction:
-    """Test the fotmob direct extraction phase (Phase 1.5)."""
+    """Test the fotmob direct extraction phase (Phase 1.5) with LLM resolution."""
 
     def test_direct_extraction_resolves_yes(self):
-        """When fotmob extraction succeeds, should resolve directly without Gemini."""
+        """When fotmob data + LLM resolves Yes, should return direct extraction result."""
         discovered = [
             {"url": "https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
              "title": "Match", "snippet": "..."},
         ]
 
         agent = CollectorGeminiGroundedStrict()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _mock_llm_response(
+            outcome="Yes", reason="Real Madrid had 8 shots outside box, threshold is 5."
+        )
 
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
-             patch.object(agent, "_get_client", return_value=MagicMock()), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
              patch("agents.collector.gemini_grounded_strict_agent.fotmob_fetch_match_stats",
                    return_value=_make_fotmob_match_data()):
@@ -879,37 +920,30 @@ class TestFotMobDirectExtraction:
         item = result.output[0].items[0]
         assert item.parsed_value == "Yes"
         assert item.extracted_fields.get("direct_extraction") is True
-        assert item.extracted_fields.get("fotmob_stat_value") == 8
-        assert item.extracted_fields.get("fotmob_stat_title") == "Shots outside box"
+        assert item.extracted_fields.get("resolution_method") == "llm_with_structured_data"
+        assert item.extracted_fields.get("fotmob_home_team") == "Osasuna"
+        assert item.extracted_fields.get("fotmob_away_team") == "Real Madrid"
         assert item.provenance.tier == 1
-        assert item.extracted_fields.get("confidence_score") == 0.95
+        assert item.extracted_fields.get("confidence_score") == 0.90
 
     def test_direct_extraction_resolves_no(self):
-        """When stat value is below threshold, should resolve No."""
-        low_data = FotMobMatchData(
-            match_id="4837357",
-            home_team="Osasuna",
-            away_team="Real Madrid",
-            url="https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
-            stats_by_category={
-                "shots": [
-                    FotMobStat(title="Shots outside box", key="shots_outside_box",
-                               home_value=2, away_value=3, category="shots"),
-                ],
-            },
-        )
+        """When LLM resolves No, should return No."""
         discovered = [
             {"url": "https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
              "title": "Match", "snippet": "..."},
         ]
 
         agent = CollectorGeminiGroundedStrict()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _mock_llm_response(
+            outcome="No", reason="Real Madrid had only 3 shots outside box, below threshold of 5."
+        )
 
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
-             patch.object(agent, "_get_client", return_value=MagicMock()), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
              patch("agents.collector.gemini_grounded_strict_agent.fotmob_fetch_match_stats",
-                   return_value=low_data):
+                   return_value=_make_fotmob_match_data()):
             ctx = AgentContext.create_minimal()
             ctx.http = MagicMock()
             spec = _create_shots_spec()
@@ -920,10 +954,10 @@ class TestFotMobDirectExtraction:
         assert result.success
         item = result.output[0].items[0]
         assert item.parsed_value == "No"
-        assert item.extracted_fields.get("fotmob_stat_value") == 3
+        assert item.extracted_fields.get("direct_extraction") is True
 
     def test_falls_back_to_gemini_on_extraction_failure(self):
-        """When fotmob extraction fails, should fall back to Gemini."""
+        """When fotmob extraction fails, should fall back to Gemini Phase 2."""
         discovered = [
             {"url": "https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
              "title": "Match", "snippet": "..."},
@@ -977,5 +1011,232 @@ class TestFotMobDirectExtraction:
 
         assert result.success
         # Should have used Gemini, not direct extraction
+        item = result.output[0].items[0]
+        assert item.extracted_fields.get("direct_extraction") is not True
+
+    def test_corner_goal_market(self):
+        """Shotmap-based market (corner goal) should resolve via LLM."""
+        corner_data = FotMobMatchData(
+            match_id="999",
+            home_team="Arsenal",
+            away_team="Tottenham",
+            url="https://www.fotmob.com/matches/arsenal-vs-tottenham/abc",
+            home_score=2,
+            away_score=0,
+            shots=[
+                FotMobShot(event_type="Goal", team_id=1, player_name="Saka",
+                           situation="FromCorner", shot_type="Head", minute=15,
+                           expected_goals=0.35, is_home=True, on_target=True),
+            ],
+            events=[
+                FotMobEvent(type="Goal", time=15, overload_time=None,
+                            is_home=True, player_name="Saka",
+                            assist_player="Odegaard"),
+            ],
+            event_types=["Goal"],
+        )
+
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/arsenal-vs-tottenham/abc",
+             "title": "Match", "snippet": "..."},
+        ]
+
+        agent = CollectorGeminiGroundedStrict()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _mock_llm_response(
+            outcome="Yes",
+            reason="Arsenal scored a goal from corner (Saka, 15') per the shotmap data.",
+        )
+
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.gemini_grounded_strict_agent.fotmob_fetch_match_stats",
+                   return_value=corner_data):
+            ctx = AgentContext.create_minimal()
+            ctx.http = MagicMock()
+            result = agent.run(ctx, _create_spec_with_sources(), _create_tool_plan())
+
+        assert result.success
+        item = result.output[0].items[0]
+        assert item.parsed_value == "Yes"
+        assert item.extracted_fields.get("direct_extraction") is True
+        assert item.extracted_fields.get("resolution_method") == "llm_with_structured_data"
+        assert item.extracted_fields.get("fotmob_shots_count") == 1
+
+    def test_llm_failure_returns_none_falls_to_phase2(self):
+        """LLM timeout/failure in Phase 1.5 should fall back to Phase 2."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
+             "title": "Match", "snippet": "..."},
+        ]
+        gemini_resp = _mock_response(
+            outcome="Yes", reason="8 shots found",
+            source_uri="https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
+        )
+
+        agent = CollectorGeminiGroundedStrict()
+        mock_client = MagicMock()
+        # Phase 1.5 LLM call raises timeout
+        mock_client.models.generate_content.side_effect = TimeoutError("LLM timeout")
+
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.gemini_grounded_strict_agent.fotmob_fetch_match_stats",
+                   return_value=_make_fotmob_match_data()), \
+             patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
+            ctx = AgentContext.create_minimal()
+            ctx.http = MagicMock()
+            spec = _create_shots_spec()
+            result = agent.run(ctx, spec, ToolPlan(
+                plan_id="tp_shots", requirements=["req_shots_001"], sources=["web"],
+            ))
+
+        assert result.success
+        item = result.output[0].items[0]
+        # Should have fallen back to Phase 2
+        assert item.extracted_fields.get("direct_extraction") is not True
+
+
+# ---------------------------------------------------------------------------
+# Tests: Generic direct extraction dispatch (extractor registry)
+# ---------------------------------------------------------------------------
+
+class TestGenericDirectExtraction:
+    """Test the generic _try_direct_extraction that dispatches to any extractor."""
+
+    def test_dispatches_to_fotmob_extractor(self):
+        """FotMob URL should be handled by the fotmob extractor."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
+             "title": "Match", "snippet": "..."},
+        ]
+
+        agent = CollectorGeminiGroundedStrict()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _mock_llm_response(
+            outcome="Yes", reason="8 shots outside box."
+        )
+
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.gemini_grounded_strict_agent.find_extractor") as mock_find:
+            mock_ext = MagicMock()
+            mock_ext.source_id = "fotmob"
+            mock_ext.can_handle.return_value = True
+            mock_ext.extract_and_summarize.return_value = (
+                "Match summary text here",
+                {"fotmob_match_id": "123", "fotmob_home_team": "Osasuna"},
+            )
+            mock_find.return_value = mock_ext
+
+            ctx = AgentContext.create_minimal()
+            ctx.http = MagicMock()
+            spec = _create_shots_spec()
+            result = agent.run(ctx, spec, ToolPlan(
+                plan_id="tp_shots", requirements=["req_shots_001"], sources=["web"],
+            ))
+
+        assert result.success
+        item = result.output[0].items[0]
+        assert item.extracted_fields.get("direct_extraction") is True
+        assert item.extracted_fields.get("resolution_method") == "llm_with_structured_data"
+
+    def test_dispatches_to_fbref_extractor(self):
+        """FBRef URL should be handled by the fbref extractor."""
+        discovered = [
+            {"url": "https://fbref.com/en/matches/7e6892e4/Brentford-Arsenal-Feb-12-Premier-League",
+             "title": "Match Report", "snippet": "..."},
+        ]
+
+        agent = CollectorGeminiGroundedStrict()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _mock_llm_response(
+            outcome="Yes", reason="Arsenal had 12 shots on target."
+        )
+
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.gemini_grounded_strict_agent.find_extractor") as mock_find:
+            mock_ext = MagicMock()
+            mock_ext.source_id = "fbref"
+            mock_ext.can_handle.return_value = True
+            mock_ext.extract_and_summarize.return_value = (
+                "Player stats from FBRef...",
+                {"fbref_game_id": "7e6892e4", "source_url": "https://fbref.com/en/matches/7e6892e4/..."},
+            )
+            mock_find.return_value = mock_ext
+
+            ctx = AgentContext.create_minimal()
+            ctx.http = MagicMock()
+            spec = _create_shots_spec()
+            result = agent.run(ctx, spec, ToolPlan(
+                plan_id="tp_shots", requirements=["req_shots_001"], sources=["web"],
+            ))
+
+        assert result.success
+        item = result.output[0].items[0]
+        assert item.extracted_fields.get("direct_extraction") is True
+        assert item.extracted_fields.get("resolution_method") == "llm_with_structured_data"
+
+    def test_falls_through_when_no_extractor_matches(self):
+        """Unknown URLs should fall through to Phase 2."""
+        discovered = [
+            {"url": "https://flashscore.com/match/123", "title": "Match", "snippet": "..."},
+        ]
+        gemini_resp = _mock_response(
+            outcome="Yes", reason="Found",
+            source_uri="https://flashscore.com/match/123",
+        )
+
+        agent = CollectorGeminiGroundedStrict()
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=MagicMock()), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.gemini_grounded_strict_agent.find_extractor", return_value=None), \
+             patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
+            ctx = AgentContext.create_minimal()
+            spec = _create_shots_spec()
+            result = agent.run(ctx, spec, ToolPlan(
+                plan_id="tp_shots", requirements=["req_shots_001"], sources=["web"],
+            ))
+
+        assert result.success
+        item = result.output[0].items[0]
+        assert item.extracted_fields.get("direct_extraction") is not True
+
+    def test_extraction_error_falls_through(self):
+        """ExtractionError should fall through to Phase 2."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/foo/bar", "title": "Match", "snippet": "..."},
+        ]
+        gemini_resp = _mock_response(
+            outcome="Yes", reason="Found via search",
+            source_uri="https://www.fotmob.com/matches/foo/bar",
+        )
+
+        agent = CollectorGeminiGroundedStrict()
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=MagicMock()), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.gemini_grounded_strict_agent.find_extractor") as mock_find, \
+             patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
+            from agents.collector.extractors.base import ExtractionError
+            mock_ext = MagicMock()
+            mock_ext.source_id = "fotmob"
+            mock_ext.extract_and_summarize.side_effect = ExtractionError("Cloudflare block")
+            mock_find.return_value = mock_ext
+
+            ctx = AgentContext.create_minimal()
+            ctx.http = MagicMock()
+            spec = _create_shots_spec()
+            result = agent.run(ctx, spec, ToolPlan(
+                plan_id="tp_shots", requirements=["req_shots_001"], sources=["web"],
+            ))
+
+        assert result.success
         item = result.output[0].items[0]
         assert item.extracted_fields.get("direct_extraction") is not True
