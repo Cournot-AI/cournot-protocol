@@ -3518,7 +3518,7 @@ def _register_agents() -> None:
     """Register collector agents."""
     from .pan_agent import PANCollectorAgent
     from .gemini_grounded_agent import CollectorGeminiGrounded
-    from .gemini_grounded_strict_agent import CollectorGeminiGroundedStrict
+    from .source_pinned_agent import CollectorSourcePinned
     from .crp_agent import CollectorCRP
 
     register_agent(
@@ -3539,13 +3539,13 @@ def _register_agents() -> None:
 
     register_agent(
         step=AgentStep.COLLECTOR,
-        name="CollectorGeminiGroundedStrict",
-        factory=lambda ctx: CollectorGeminiGroundedStrict(),
+        name="CollectorSourcePinned",
+        factory=lambda ctx: CollectorSourcePinned(),
         capabilities={AgentCapability.LLM, AgentCapability.NETWORK},
         priority=198,  # Just below GeminiGrounded (200)
         metadata={
             "description": (
-                "Strict Gemini-grounded collector. Like CollectorGeminiGrounded "
+                "Source-pinned collector. Like CollectorGeminiGrounded "
                 "but ONLY searches within data-source domains specified in the "
                 "requirement's source_targets. Evidence from other domains is "
                 "discarded. Retries up to 3 times to find required-domain evidence. "

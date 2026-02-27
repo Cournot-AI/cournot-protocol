@@ -1,5 +1,5 @@
 """
-Tests for CollectorGeminiGroundedStrict.
+Tests for CollectorSourcePinned.
 
 Tests the strict Gemini-grounded collector that only searches within
 required data-source domains specified in source_targets.  Validates
@@ -22,8 +22,8 @@ if "google.genai" not in sys.modules:
     sys.modules["google.genai.types"] = _genai_mock.types
 
 from agents.context import AgentContext
-from agents.collector.gemini_grounded_strict_agent import (
-    CollectorGeminiGroundedStrict,
+from agents.collector.source_pinned_agent import (
+    CollectorSourcePinned,
     _build_strict_prompt,
 )
 from agents.collector.fotmob import FotMobMatchData, FotMobStat, FotMobShot, FotMobEvent
@@ -285,7 +285,7 @@ class TestSerperDiscovery:
 
     def _make_agent_with_mock_query(self, query="site:fotmob.com Arsenal vs Tottenham"):
         """Create agent with _generate_discovery_query mocked to return a fixed query."""
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         agent._generate_discovery_query = MagicMock(return_value=query)
         return agent
 
@@ -407,7 +407,7 @@ class TestSerperDiscovery:
 
     def test_generate_discovery_query_produces_site_scoped_query(self):
         """_generate_discovery_query should produce a site:-scoped query via LLM."""
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         spec = _create_spec_with_sources()
         req = spec.data_requirements[0]
 
@@ -431,7 +431,7 @@ class TestSerperDiscovery:
 
     def test_generate_discovery_query_fallback_on_error(self):
         """On LLM error, should fall back to entity + question."""
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         spec = _create_spec_with_sources()
         req = spec.data_requirements[0]
 
@@ -458,7 +458,7 @@ class TestExtractUrlContextMetadata:
                 {"url": "https://www.fotmob.com/news/recap", "status": "success"},
             ],
         )
-        meta = CollectorGeminiGroundedStrict._extract_url_context_metadata(resp)
+        meta = CollectorSourcePinned._extract_url_context_metadata(resp)
         assert len(meta) == 2
         assert meta[0]["url"] == "https://www.fotmob.com/matches/abc123"
         assert meta[0]["status"] == "success"
@@ -469,13 +469,13 @@ class TestExtractUrlContextMetadata:
                 {"url": "https://www.fotmob.com/matches/abc123", "status": "failed"},
             ],
         )
-        meta = CollectorGeminiGroundedStrict._extract_url_context_metadata(resp)
+        meta = CollectorSourcePinned._extract_url_context_metadata(resp)
         assert len(meta) == 1
         assert meta[0]["status"] == "failed"
 
     def test_empty_when_no_url_context(self):
         resp = _mock_response()  # no url_context_urls
-        meta = CollectorGeminiGroundedStrict._extract_url_context_metadata(resp)
+        meta = CollectorSourcePinned._extract_url_context_metadata(resp)
         assert meta == []
 
 
@@ -483,12 +483,12 @@ class TestExtractUrlContextMetadata:
 # Tests: Collector behavior (end-to-end with mocks)
 # ---------------------------------------------------------------------------
 
-class TestCollectorGeminiGroundedStrict:
+class TestCollectorSourcePinned:
     """Integration tests for the strict collector."""
 
     def test_fails_without_source_targets(self):
         """No source_targets → immediate failure."""
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()):
             ctx = AgentContext.create_minimal()
@@ -509,7 +509,7 @@ class TestCollectorGeminiGroundedStrict:
             source_uri="https://www.fotmob.com/matches/arsenal-tottenham",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=[]), \
@@ -537,7 +537,7 @@ class TestCollectorGeminiGroundedStrict:
             source_title="FotMob",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         call_count = 0
 
         def mock_call(client, prompt, *, discovered_urls=None):
@@ -570,7 +570,7 @@ class TestCollectorGeminiGroundedStrict:
             source_title="Flashscore",
         )
 
-        agent = CollectorGeminiGroundedStrict(max_attempts=2)
+        agent = CollectorSourcePinned(max_attempts=2)
         call_count = 0
 
         def mock_call(client, prompt, *, discovered_urls=None):
@@ -598,7 +598,7 @@ class TestCollectorGeminiGroundedStrict:
             source_uri="https://www.fotmob.com/matches/123",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=[]), \
@@ -616,7 +616,7 @@ class TestCollectorGeminiGroundedStrict:
             source_title="Flashscore",
         )
 
-        agent = CollectorGeminiGroundedStrict(max_attempts=1)
+        agent = CollectorSourcePinned(max_attempts=1)
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=[]), \
@@ -632,7 +632,7 @@ class TestCollectorGeminiGroundedStrict:
 
     def test_api_error_returns_failure(self):
         """API error should return failure evidence."""
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=[]), \
@@ -646,7 +646,7 @@ class TestCollectorGeminiGroundedStrict:
 
     def test_no_api_key_returns_failure(self):
         """Missing API key should fail."""
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         ctx = AgentContext.create_minimal()
         with patch.dict("os.environ", {}, clear=True):
             result = agent.run(ctx, _create_spec_with_sources(), _create_tool_plan())
@@ -659,7 +659,7 @@ class TestCollectorGeminiGroundedStrict:
             source_uri="https://www.fotmob.com/matches/123",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=[]), \
@@ -682,7 +682,7 @@ class TestCollectorGeminiGroundedStrict:
             ],
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         gemini_calls = []
 
         def mock_call(client, prompt, *, discovered_urls=None):
@@ -715,7 +715,7 @@ class TestCollectorGeminiGroundedStrict:
             ],
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
@@ -746,7 +746,7 @@ class TestCollectorGeminiGroundedStrict:
             ],
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
@@ -770,7 +770,7 @@ class TestFilterToRequiredDomains:
             {"uri": "https://api.fotmob.com/stats", "title": "FotMob API"},
         ]
         required = [{"domain": "fotmob.com"}]
-        filtered = CollectorGeminiGroundedStrict._filter_to_required_domains(
+        filtered = CollectorSourcePinned._filter_to_required_domains(
             sources, required,
         )
         assert len(filtered) == 2
@@ -781,7 +781,7 @@ class TestFilterToRequiredDomains:
             {"uri": "https://flashscore.com/match/456", "title": "Flashscore"},
         ]
         required = [{"domain": "fotmob.com"}]
-        filtered = CollectorGeminiGroundedStrict._filter_to_required_domains(
+        filtered = CollectorSourcePinned._filter_to_required_domains(
             sources, required,
         )
         assert len(filtered) == 0
@@ -927,7 +927,7 @@ class TestFotMobDirectExtraction:
              "title": "Match", "snippet": "..."},
         ]
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = _mock_llm_response(
             outcome="Yes", reason="Real Madrid had 8 shots outside box, threshold is 5."
@@ -937,7 +937,7 @@ class TestFotMobDirectExtraction:
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor",
+             patch("agents.collector.source_pinned_agent.find_extractor",
                    return_value=mock_ext):
             ctx = AgentContext.create_minimal()
             ctx.http = MagicMock()
@@ -963,7 +963,7 @@ class TestFotMobDirectExtraction:
              "title": "Match", "snippet": "..."},
         ]
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = _mock_llm_response(
             outcome="No", reason="Real Madrid had only 3 shots outside box, below threshold of 5."
@@ -973,7 +973,7 @@ class TestFotMobDirectExtraction:
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor",
+             patch("agents.collector.source_pinned_agent.find_extractor",
                    return_value=mock_ext):
             ctx = AgentContext.create_minimal()
             ctx.http = MagicMock()
@@ -998,13 +998,13 @@ class TestFotMobDirectExtraction:
             source_uri="https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
 
         mock_ext = _mock_fotmob_extractor(error="Page structure changed")
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor",
+             patch("agents.collector.source_pinned_agent.find_extractor",
                    return_value=mock_ext), \
              patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
             ctx = AgentContext.create_minimal()
@@ -1030,7 +1030,7 @@ class TestFotMobDirectExtraction:
             source_uri="https://www.fotmob.com/teams/8633",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
@@ -1073,7 +1073,7 @@ class TestFotMobDirectExtraction:
              "title": "Match", "snippet": "..."},
         ]
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = _mock_llm_response(
             outcome="Yes",
@@ -1084,7 +1084,7 @@ class TestFotMobDirectExtraction:
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor",
+             patch("agents.collector.source_pinned_agent.find_extractor",
                    return_value=mock_ext):
             ctx = AgentContext.create_minimal()
             ctx.http = MagicMock()
@@ -1108,7 +1108,7 @@ class TestFotMobDirectExtraction:
             source_uri="https://www.fotmob.com/matches/osasuna-vs-real-madrid/2e2ylz",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         mock_client = MagicMock()
         # Phase 1.5 LLM call raises timeout
         mock_client.models.generate_content.side_effect = TimeoutError("LLM timeout")
@@ -1117,7 +1117,7 @@ class TestFotMobDirectExtraction:
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor",
+             patch("agents.collector.source_pinned_agent.find_extractor",
                    return_value=mock_ext), \
              patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
             ctx = AgentContext.create_minimal()
@@ -1147,7 +1147,7 @@ class TestGenericDirectExtraction:
              "title": "Match", "snippet": "..."},
         ]
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = _mock_llm_response(
             outcome="Yes", reason="8 shots outside box."
@@ -1156,7 +1156,7 @@ class TestGenericDirectExtraction:
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor") as mock_find:
+             patch("agents.collector.source_pinned_agent.find_extractor") as mock_find:
             mock_ext = MagicMock()
             mock_ext.source_id = "fotmob"
             mock_ext.can_handle.return_value = True
@@ -1185,7 +1185,7 @@ class TestGenericDirectExtraction:
              "title": "Match Report", "snippet": "..."},
         ]
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = _mock_llm_response(
             outcome="Yes", reason="Arsenal had 12 shots on target."
@@ -1194,7 +1194,7 @@ class TestGenericDirectExtraction:
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=mock_client), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor") as mock_find:
+             patch("agents.collector.source_pinned_agent.find_extractor") as mock_find:
             mock_ext = MagicMock()
             mock_ext.source_id = "fbref"
             mock_ext.can_handle.return_value = True
@@ -1226,11 +1226,11 @@ class TestGenericDirectExtraction:
             source_uri="https://flashscore.com/match/123",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor", return_value=None), \
+             patch("agents.collector.source_pinned_agent.find_extractor", return_value=None), \
              patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
             ctx = AgentContext.create_minimal()
             spec = _create_shots_spec()
@@ -1252,11 +1252,11 @@ class TestGenericDirectExtraction:
             source_uri="https://www.fotmob.com/matches/foo/bar",
         )
 
-        agent = CollectorGeminiGroundedStrict()
+        agent = CollectorSourcePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
              patch.object(agent, "_serper_discover_urls", return_value=discovered), \
-             patch("agents.collector.gemini_grounded_strict_agent.find_extractor") as mock_find, \
+             patch("agents.collector.source_pinned_agent.find_extractor") as mock_find, \
              patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
             from agents.collector.extractors.base import ExtractionError
             mock_ext = MagicMock()

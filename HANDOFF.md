@@ -10,7 +10,7 @@ Replace the hardcoded FotMob-only Phase 1.5 with a pluggable extractor registry,
   3. **Phase 2: Gemini UrlContext + GoogleSearch** — fallback if Phase 1.5 is not applicable or fails. Passes discovered URLs to Gemini via `UrlContext` tool for full page ingestion.
 - **93 tests pass** across 5 test files:
   - `test_fotmob.py` (31 tests) — FotMob data extraction
-  - `test_collector_gemini_grounded_strict.py` (40 tests) — strict agent behavior
+  - `test_collector_source_pinned.py` (40 tests) — strict agent behavior
   - `test_extractor_registry.py` (8 tests) — registry + FotMobExtractor
   - `test_fbref_extractor.py` (12 tests) — FBRefExtractor
   - `test_fotmob_live.py` (2 tests) — live FotMob fetch
@@ -33,7 +33,7 @@ Introduced a `SiteExtractor` ABC and a registry pattern:
 
 4. **`agents/collector/extractors/fbref_ext.py`** — `FBRefExtractor` using `soccerdata` library. Parses game ID from URL, infers league/season, fetches player stats + shot events via `soccerdata.FBref`, builds text summary.
 
-5. **`agents/collector/gemini_grounded_strict_agent.py`** — Replaced `_try_fotmob_direct_extraction` with `_try_direct_extraction` that uses `find_extractor()` dispatch. Removed direct fotmob imports.
+5. **`agents/collector/source_pinned_agent.py`** — Replaced `_try_fotmob_direct_extraction` with `_try_direct_extraction` that uses `find_extractor()` dispatch. Removed direct fotmob imports.
 
 ### Architecture
 
@@ -76,8 +76,8 @@ The registry is a simple list of `SiteExtractor` instances. `find_extractor(url)
 
 ### Files Changed
 - **New:** `agents/collector/extractors/` — package with `base.py`, `__init__.py`, `fotmob_ext.py`, `fbref_ext.py`
-- **Modified:** `agents/collector/gemini_grounded_strict_agent.py` — replaced `_try_fotmob_direct_extraction` → `_try_direct_extraction`; imports changed from `fotmob` to `extractors`
-- **Modified:** `tests/test_collector_gemini_grounded_strict.py` — updated `TestFotMobDirectExtraction` to mock `find_extractor`; added `TestGenericDirectExtraction` (4 tests)
+- **Modified:** `agents/collector/source_pinned_agent.py` — replaced `_try_fotmob_direct_extraction` → `_try_direct_extraction`; imports changed from `fotmob` to `extractors`
+- **Modified:** `tests/test_collector_source_pinned.py` — updated `TestFotMobDirectExtraction` to mock `find_extractor`; added `TestGenericDirectExtraction` (4 tests)
 - **New:** `tests/test_extractor_registry.py` — 8 tests for registry + FotMobExtractor
 - **New:** `tests/test_fbref_extractor.py` — 12 tests for FBRefExtractor
 
@@ -125,7 +125,7 @@ r = json.load(open('prompt_out.json'))
 print(json.dumps({
     'prompt_spec': r['prompt_spec'],
     'tool_plan': r['tool_plan'],
-    'collectors': ['CollectorGeminiGroundedStrict'],
+    'collectors': ['CollectorSourcePinned'],
     'include_raw_content': False
 }))
 ")" -o collect_out.json

@@ -190,7 +190,7 @@ def _build_strict_prompt(
 # Strict Gemini-Grounded Collector
 # ---------------------------------------------------------------------------
 
-class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
+class CollectorSourcePinned(CollectorGeminiGrounded):
     """Strict variant of the Gemini-grounded collector.
 
     Only searches within data-source domains specified in the
@@ -210,7 +210,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
     requirement, retrying until evidence from a required domain is found.
     """
 
-    _name = "CollectorGeminiGroundedStrict"
+    _name = "CollectorSourcePinned"
     _version = "v2"
     _capabilities = {AgentCapability.LLM, AgentCapability.NETWORK}
 
@@ -351,10 +351,10 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
         """
         api_key = self._get_serper_api_key(ctx)
         if not api_key:
-            ctx.info("[GeminiGroundedStrict] No Serper API key — skipping URL discovery")
+            ctx.info("[SourcePinned] No Serper API key — skipping URL discovery")
             return []
         if not ctx.http:
-            ctx.info("[GeminiGroundedStrict] No HTTP client — skipping URL discovery")
+            ctx.info("[SourcePinned] No HTTP client — skipping URL discovery")
             return []
 
         discovered: list[dict[str, str]] = []
@@ -366,7 +366,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                 client, prompt_spec, requirement, domain,
             )
 
-            ctx.info(f"[GeminiGroundedStrict] Serper discovery: {query!r}")
+            ctx.info(f"[SourcePinned] Serper discovery: {query!r}")
 
             try:
                 response = ctx.http.post(
@@ -381,7 +381,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
 
                 if not response.ok:
                     ctx.warning(
-                        f"[GeminiGroundedStrict] Serper HTTP {response.status_code}"
+                        f"[SourcePinned] Serper HTTP {response.status_code}"
                     )
                     continue
 
@@ -407,12 +407,12 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                         break
 
                 ctx.info(
-                    f"[GeminiGroundedStrict] Serper found {len(discovered)} URLs "
+                    f"[SourcePinned] Serper found {len(discovered)} URLs "
                     f"on {domain}"
                 )
 
             except Exception as e:
-                ctx.warning(f"[GeminiGroundedStrict] Serper error: {e}")
+                ctx.warning(f"[SourcePinned] Serper error: {e}")
 
             if len(discovered) >= self._serper_max_urls:
                 break
@@ -453,14 +453,14 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
             return None
 
         if not ctx.http:
-            ctx.info("[GeminiGroundedStrict] No HTTP client for direct extraction")
+            ctx.info("[SourcePinned] No HTTP client for direct extraction")
             return None
 
         import concurrent.futures
         from google.genai import types
 
         ctx.info(
-            f"[GeminiGroundedStrict] Attempting {extractor.source_id} "
+            f"[SourcePinned] Attempting {extractor.source_id} "
             f"direct extraction: {match_url}"
         )
 
@@ -472,7 +472,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
             )
         except ExtractionError as e:
             ctx.warning(
-                f"[GeminiGroundedStrict] {extractor.source_id} extraction failed: {e}"
+                f"[SourcePinned] {extractor.source_id} extraction failed: {e}"
             )
             return None
 
@@ -503,7 +503,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
         )
 
         ctx.info(
-            f"[GeminiGroundedStrict] Calling LLM for {extractor.source_id} "
+            f"[SourcePinned] Calling LLM for {extractor.source_id} "
             f"data interpretation"
         )
 
@@ -522,7 +522,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                 response = future.result(timeout=30)
         except Exception as e:
             ctx.warning(
-                f"[GeminiGroundedStrict] {extractor.source_id} LLM call failed: {e}"
+                f"[SourcePinned] {extractor.source_id} LLM call failed: {e}"
             )
             return None
 
@@ -535,7 +535,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
 
         if outcome.lower() not in ("yes", "no"):
             ctx.warning(
-                f"[GeminiGroundedStrict] {extractor.source_id} LLM returned "
+                f"[SourcePinned] {extractor.source_id} LLM returned "
                 f"invalid outcome: {outcome!r}"
             )
             return None
@@ -548,7 +548,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
         }
 
         ctx.info(
-            f"[GeminiGroundedStrict] {extractor.source_id} LLM resolution SUCCESS: "
+            f"[SourcePinned] {extractor.source_id} LLM resolution SUCCESS: "
             f"outcome={outcome}, reason={reason[:100]}"
         )
 
@@ -567,13 +567,13 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
     ) -> tuple[EvidenceItem, ToolCallRecord]:
         req_id = requirement.requirement_id
         evidence_id = hashlib.sha256(
-            f"gemini_grounded_strict:{req_id}".encode()
+            f"source_pinned:{req_id}".encode()
         ).hexdigest()[:16]
 
         required_domains = _extract_required_domains(requirement)
 
         record = ToolCallRecord(
-            tool="gemini_grounded_strict:search_and_resolve",
+            tool="source_pinned:search_and_resolve",
             input={
                 "requirement_id": req_id,
                 "model": self._model,
@@ -591,14 +591,14 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                 evidence_id=evidence_id,
                 requirement_id=req_id,
                 provenance=Provenance(
-                    source_id="gemini_grounded_strict",
+                    source_id="source_pinned",
                     source_uri=f"gemini:{self._model}",
                     tier=0,
                     fetched_at=ctx.now(),
                 ),
                 success=False,
                 error=(
-                    "CollectorGeminiGroundedStrict requires source_targets "
+                    "CollectorSourcePinned requires source_targets "
                     "with at least one domain. Use CollectorGeminiGrounded "
                     "for open-ended search."
                 ),
@@ -687,7 +687,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
             for attempt in range(1, self._max_attempts + 1):
                 attempts_made = attempt
                 ctx.info(
-                    f"[GeminiGroundedStrict] Attempt {attempt}/{self._max_attempts} "
+                    f"[SourcePinned] Attempt {attempt}/{self._max_attempts} "
                     f"for {req_id} (domains: {[d['domain'] for d in required_domains]}, "
                     f"discovered_urls: {len(discovered_urls)})"
                 )
@@ -721,7 +721,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                 sources_covered = len(filtered_sources) > 0
 
                 ctx.info(
-                    f"[GeminiGroundedStrict] Attempt {attempt}: "
+                    f"[SourcePinned] Attempt {attempt}: "
                     f"outcome={parsed.get('outcome')}, "
                     f"total_sources={len(grounding.get('sources', []))}, "
                     f"url_context_ok={sum(1 for u in url_ctx_meta if u.get('status') == 'success')}, "
@@ -735,7 +735,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                     best_grounding = grounding
                     best_sources_covered = True
                     ctx.info(
-                        f"[GeminiGroundedStrict] Found required-domain evidence "
+                        f"[SourcePinned] Found required-domain evidence "
                         f"on attempt {attempt}!"
                     )
                     break  # Got what we need
@@ -797,7 +797,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                 evidence_id=evidence_id,
                 requirement_id=req_id,
                 provenance=Provenance(
-                    source_id="gemini_grounded_strict",
+                    source_id="source_pinned",
                     source_uri=f"gemini:{self._model}",
                     tier=1 if best_sources_covered else 2,
                     fetched_at=ctx.now(),
@@ -832,7 +832,7 @@ class CollectorGeminiGroundedStrict(CollectorGeminiGrounded):
                 evidence_id=evidence_id,
                 requirement_id=req_id,
                 provenance=Provenance(
-                    source_id="gemini_grounded_strict",
+                    source_id="source_pinned",
                     source_uri=f"gemini:{self._model}",
                     tier=0,
                     fetched_at=ctx.now(),
