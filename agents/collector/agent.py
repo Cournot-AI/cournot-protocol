@@ -3511,7 +3511,7 @@ def _register_agents() -> None:
     """Register collector agents."""
     from .pan_agent import PANCollectorAgent
     from .gemini_grounded_agent import CollectorOpenSearch
-    from .source_pinned_agent import CollectorDomainPinned
+    from .source_pinned_agent import CollectorSitePinned
     from .crp_agent import CollectorCRP
 
     register_agent(
@@ -3530,8 +3530,8 @@ def _register_agents() -> None:
 
     register_agent(
         step=AgentStep.COLLECTOR,
-        name="CollectorDomainPinned",
-        factory=lambda ctx: CollectorDomainPinned(),
+        name="CollectorSitePinned",
+        factory=lambda ctx: CollectorSitePinned(),
         capabilities={AgentCapability.LLM, AgentCapability.NETWORK},
         priority=198,  # Just below GeminiGrounded (200)
         metadata={

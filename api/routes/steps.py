@@ -83,7 +83,7 @@ class ResolveRequest(BaseModel):
     tool_plan: dict[str, Any] = Field(
         ..., description="Tool execution plan (from /step/prompt output)"
     )
-    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorDomainPinned", "CollectorCRP"]] = Field(
+    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorSitePinned", "CollectorCRP"]] = Field(
         default=["CollectorWebPageReader"],
         description="Which collector agents to use (runs all in sequence)",
         min_length=1,
@@ -134,7 +134,7 @@ class CollectRequest(BaseModel):
     tool_plan: dict[str, Any] = Field(
         ..., description="Tool execution plan (from /step/prompt)"
     )
-    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorDomainPinned", "CollectorCRP"]] = Field(
+    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorSitePinned", "CollectorCRP"]] = Field(
         default=["CollectorWebPageReader"],
         description="Which collector agents to use (runs all in sequence)",
         min_length=1,
@@ -613,9 +613,9 @@ async def run_collect(request: CollectRequest) -> CollectResponse:
                 elif collector_name == "CollectorOpenSearch":
                     from agents.collector.gemini_grounded_agent import CollectorOpenSearch
                     collector = CollectorOpenSearch()
-                elif collector_name == "CollectorDomainPinned":
-                    from agents.collector.source_pinned_agent import CollectorDomainPinned
-                    collector = CollectorDomainPinned()
+                elif collector_name == "CollectorSitePinned":
+                    from agents.collector.source_pinned_agent import CollectorSitePinned
+                    collector = CollectorSitePinned()
                 elif collector_name == "CollectorCRP":
                     from agents.collector.crp_agent import CollectorCRP
                     collector = CollectorCRP()

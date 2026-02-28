@@ -1,5 +1,5 @@
 """
-Domain-Pinned Collector Agent (CollectorDomainPinned).
+Site-Pinned Collector Agent (CollectorSitePinned).
 
 Searches ONLY within data-source domains specified in the requirement's
 source_targets.  Uses Serper for URL discovery, structured extractors
@@ -224,8 +224,8 @@ def _build_strict_prompt(
 # Strict Gemini-Grounded Collector
 # ---------------------------------------------------------------------------
 
-class CollectorDomainPinned(CollectorOpenSearch):
-    """Domain-pinned collector.
+class CollectorSitePinned(CollectorOpenSearch):
+    """Site-pinned collector.
 
     Searches ONLY within data-source domains specified in the
     requirement's ``source_targets``.  Uses Serper for URL discovery,
@@ -234,7 +234,7 @@ class CollectorDomainPinned(CollectorOpenSearch):
     Requires GOOGLE_API_KEY.
     """
 
-    _name = "CollectorDomainPinned"
+    _name = "CollectorSitePinned"
     _version = "v2"
     _capabilities = {AgentCapability.LLM, AgentCapability.NETWORK}
 
@@ -622,7 +622,7 @@ class CollectorDomainPinned(CollectorOpenSearch):
                 ),
                 success=False,
                 error=(
-                    "CollectorDomainPinned requires source_targets "
+                    "CollectorSitePinned requires source_targets "
                     "with at least one domain. Use CollectorOpenSearch "
                     "for open-ended search."
                 ),
