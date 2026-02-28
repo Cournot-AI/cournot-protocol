@@ -3522,11 +3522,8 @@ def _register_agents() -> None:
         priority=200,  # 1st — single-call grounded search via Gemini
         metadata={
             "description": (
-                "Open web search collector (Gemini only). Uses Google Gemini "
-                "with built-in Google Search grounding to resolve market "
-                "questions in a single LLM call. Searches the open web "
-                "autonomously and returns a grounded answer with citations. "
-                "Requires GOOGLE_API_KEY."
+                "Searches the open web to resolve market questions in a "
+                "single pass. Returns a grounded answer with source citations."
             ),
         },
     )
@@ -3539,11 +3536,9 @@ def _register_agents() -> None:
         priority=198,  # Just below GeminiGrounded (200)
         metadata={
             "description": (
-                "Domain-pinned collector. Searches ONLY within data-source "
-                "domains specified in the requirement's source_targets. Uses "
-                "Serper for URL discovery, structured extractors for direct "
-                "data extraction, and Gemini UrlContext + GoogleSearch as "
-                "fallback. Retries up to 3 times. Requires GOOGLE_API_KEY."
+                "Searches only within specified data-source domains. "
+                "Discovers relevant pages, extracts structured data, and "
+                "retries up to 3 times to find domain-specific evidence."
             ),
         },
     )
@@ -3556,10 +3551,9 @@ def _register_agents() -> None:
         priority=195,  # 2nd — 4-phase Cognitive Resolution Pipeline
         metadata={
             "description": (
-                "Cognitive Resolution Pipeline collector. 4-phase structured "
-                "reasoning: Contract Clerk (parse) -> Investigator (search) -> "
-                "Auditor (extract) -> Judge (adjudicate). Each phase is a "
-                "separate LLM call with a focused prompt to prevent hallucination."
+                "4-phase structured reasoning pipeline: parse the contract, "
+                "investigate sources, extract evidence, and adjudicate the "
+                "outcome. Each phase is independently verified."
             ),
         },
     )
@@ -3570,7 +3564,7 @@ def _register_agents() -> None:
         factory=lambda ctx: CollectorHyDE(),
         capabilities={AgentCapability.LLM, AgentCapability.NETWORK},
         priority=190,  # 3rd — HyDE requires both LLM and HTTP
-        metadata={"description": "Hypothetical Document Embeddings collector. Generates a hypothetical ideal answer first, then searches for real sources that match it. Good for complex or nuanced requirements."},
+        metadata={"description": "Generates a hypothetical ideal answer first, then searches for real sources that match it. Good for complex or nuanced requirements."},
     )
 
     register_agent(
@@ -3581,11 +3575,9 @@ def _register_agents() -> None:
         priority=170,  # 4th — PAN wraps workflow with search
         metadata={
             "description": (
-                "PAN (Program-of-thought with Adaptive search over Nondeterminism) collector. "
-                "Runs the evidence-collection workflow through branchpoint search "
-                "(beam / best-of-N) to explore multiple execution paths and keep "
-                "the highest-scoring result. Configurable via search_algo, "
-                "default_branching, and beam_width."
+                "Explores multiple evidence-collection paths in parallel "
+                "and keeps the highest-scoring result. Best for markets "
+                "where a single search may miss key evidence."
             ),
         },
     )
@@ -3596,7 +3588,7 @@ def _register_agents() -> None:
         factory=lambda ctx: CollectorAgenticRAG(),
         capabilities={AgentCapability.LLM, AgentCapability.NETWORK},
         priority=160,  # 5th — AgenticRAG requires both LLM and HTTP
-        metadata={"description": "Agentic RAG collector with iterative deep reasoning. Plans queries, retrieves candidates, assesses relevance via LLM, and synthesizes evidence with conflict handling. Produces the highest-quality evidence bundles."},
+        metadata={"description": "Iterative deep reasoning collector. Plans queries, retrieves candidates, assesses relevance, and synthesizes evidence with conflict handling."},
     )
 
     register_agent(
@@ -3605,7 +3597,7 @@ def _register_agents() -> None:
         factory=lambda ctx: CollectorGraphRAG(),
         capabilities={AgentCapability.LLM, AgentCapability.NETWORK},
         priority=150,  # 6th — GraphRAG local-to-global summarization
-        metadata={"description": "GraphRAG collector implementing Local-to-Global query-focused summarization. Builds an entity-relation graph from retrieved documents, detects communities, generates community reports, and uses MAP-REDUCE over communities for synthesis."},
+        metadata={"description": "Builds a knowledge graph from retrieved documents, identifies topic clusters, and synthesizes evidence from local details to global summary."},
     )
 
     register_agent(
@@ -3614,7 +3606,7 @@ def _register_agents() -> None:
         factory=lambda ctx: CollectorBrowse(),
         capabilities={AgentCapability.LLM},
         priority=180,  # 3rd — preferred when LLM available
-        metadata={"description": "Browse-based collector. Uses an LLM with web browsing capability to fetch and interpret specific URL content. Extracts structured data with automatic JSON repair. Supports deferred source discovery via search."},
+        metadata={"description": "Browses specific URLs to fetch and interpret page content. Extracts structured data with automatic repair. Supports deferred source discovery via search."},
     )
 
     register_agent(
@@ -3623,7 +3615,7 @@ def _register_agents() -> None:
         factory=lambda ctx: CollectorHTTP(),
         capabilities={AgentCapability.NETWORK},
         priority=100,  # 7th — direct HTTP fetch
-        metadata={"description": "Direct HTTP collector that fetches data from explicit URLs in the tool plan. No LLM interpretation — returns raw API/page responses. Fast and deterministic."},
+        metadata={"description": "Fetches data directly from explicit URLs. Returns raw responses without interpretation. Fast and deterministic."},
     )
 
     register_agent(
@@ -3633,7 +3625,7 @@ def _register_agents() -> None:
         capabilities={AgentCapability.DETERMINISTIC, AgentCapability.REPLAY},
         priority=50,  # 8th — fallback mock
         is_fallback=True,
-        metadata={"description": "Mock collector for testing and replay. Returns predetermined responses without making real network requests."},
+        metadata={"description": "Returns predetermined responses for testing and replay. No real network requests."},
     )
 
 
