@@ -125,6 +125,11 @@ class LLMReasoner:
             {"role": "user", "content": user_prompt},
         ]
 
+        # Inject dispute context if present (dispute-driven rerun)
+        dispute_ctx = ctx.extra.get("dispute_context")
+        if dispute_ctx:
+            messages.append({"role": "user", "content": self._build_dispute_prompt(dispute_ctx)})
+
         # Secondary truncation: if estimated tokens exceed target, reduce evidence and rebuild
         while self._estimate_tokens(messages) > target_tokens and max_chars > 2000:
             max_chars = max(2000, max_chars // 2)
@@ -176,6 +181,43 @@ class LLMReasoner:
                     raw_output = response.content
         
         raise ValueError(f"Failed to generate reasoning trace after {self.MAX_RETRIES + 1} attempts: {last_error}")
+
+    def _build_dispute_prompt(self, dispute_ctx: dict[str, Any]) -> str:
+        """Build a dispute injection block for the LLM messages."""
+        parts: list[str] = [
+            "## DISPUTE CONTEXT — This is a dispute-driven rerun.",
+            "",
+            f"Reason code: {dispute_ctx.get('reason_code')}",
+            f"Disputant message: {dispute_ctx.get('message')}",
+        ]
+
+        target = dispute_ctx.get("target")
+        if isinstance(target, dict):
+            if target.get("artifact"):
+                parts.append(f"Disputed artifact: {target.get('artifact')}")
+            if target.get("leaf_path"):
+                parts.append(f"Disputed leaf_path: {target.get('leaf_path')}")
+
+        patch = dispute_ctx.get("patch")
+        if patch is not None:
+            try:
+                parts.append("Patch/override provided by user:")
+                parts.append(json.dumps(patch, indent=2)[:6000])
+            except Exception:
+                parts.append(f"Patch/override provided by user (unserializable): {type(patch)}")
+
+        parts.extend(
+            [
+                "",
+                "INSTRUCTIONS:",
+                "1) Address the dispute point FIRST.",
+                "2) Explicitly state whether you agree or disagree with the dispute claim.",
+                "3) If the dispute reveals a genuine issue, adjust your reasoning accordingly.",
+                "4) If the dispute is unfounded, explain why the original reasoning holds.",
+                "5) Include a short section in your summary addressing the dispute.",
+            ]
+        )
+        return "\n".join(parts)
     
     def _prepare_evidence_json(
         self,

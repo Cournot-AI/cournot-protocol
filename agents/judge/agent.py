@@ -209,6 +209,11 @@ class JudgeLLM(BaseAgent):
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
+
+        # Inject dispute context if present (dispute-driven rerun)
+        dispute_ctx = ctx.extra.get("dispute_context")
+        if dispute_ctx:
+            messages.append({"role": "user", "content": self._build_dispute_prompt(dispute_ctx)})
         
         # Get LLM response
         response = ctx.llm.chat(messages)
@@ -236,6 +241,42 @@ class JudgeLLM(BaseAgent):
                     }
         
         return {}
+
+    def _build_dispute_prompt(self, dispute_ctx: dict[str, Any]) -> str:
+        """Build a dispute injection block for the Judge LLM."""
+        parts: list[str] = [
+            "## DISPUTE CONTEXT — This is a dispute-driven rerun.",
+            "",
+            f"Reason code: {dispute_ctx.get('reason_code')}",
+            f"Disputant message: {dispute_ctx.get('message')}",
+        ]
+
+        target = dispute_ctx.get("target")
+        if isinstance(target, dict):
+            if target.get("artifact"):
+                parts.append(f"Disputed artifact: {target.get('artifact')}")
+            if target.get("leaf_path"):
+                parts.append(f"Disputed leaf_path: {target.get('leaf_path')}")
+
+        patch = dispute_ctx.get("patch")
+        if patch is not None:
+            try:
+                parts.append("Patch/override provided by user:")
+                parts.append(json.dumps(patch, indent=2)[:6000])
+            except Exception:
+                parts.append(f"Patch/override provided by user (unserializable): {type(patch)}")
+
+        parts.extend(
+            [
+                "",
+                "INSTRUCTIONS:",
+                "1) Evaluate the dispute point FIRST.",
+                "2) Explicitly state whether you agree or disagree with the dispute claim.",
+                "3) If needed, revise the final verdict and confidence.",
+                "4) In final_justification, include a short section addressing the dispute.",
+            ]
+        )
+        return "\n".join(parts)
     
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from LLM response."""
