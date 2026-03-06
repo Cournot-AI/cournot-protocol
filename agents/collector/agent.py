@@ -1296,6 +1296,8 @@ class CollectorHyDE(BaseAgent):
             evidence_sources = _normalize_evidence_sources(raw_sources)
 
             extracted_fields = {
+                "outcome": data.get("parsed_value"),
+                "reason": data.get("reasoning_trace", ""),
                 "confidence_score": confidence_score,
                 "resolution_status": resolution_status,
                 "evidence_sources": evidence_sources,

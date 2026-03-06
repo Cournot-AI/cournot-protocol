@@ -18,6 +18,25 @@ You MUST output valid JSON matching the exact schema specified. No explanations,
 4. **Draw Conclusions**: Build toward a preliminary outcome. For binary markets: YES/NO/INVALID/UNCERTAIN. For multi-choice markets: one of the enumerated possible outcomes, INVALID, or UNCERTAIN.
 5. **Assess Confidence**: Provide a confidence score based on evidence quality
 
+## Evidence Item Structure
+
+Each evidence item in the bundle contains:
+- **from_collector**: Which collector produced this (e.g. CollectorOpenSearch, CollectorHyDE)
+- **provenance_tier**: Infrastructure-level source quality (0-4, higher = more trustworthy)
+- **parsed_value**: The collector's extracted answer
+- **extracted_fields**: Structured data including:
+  - `outcome`: The collector's answer (e.g. "Yes", "No", or a specific value)
+  - `reason`: The collector's reasoning/explanation
+  - `confidence_score`: Self-assessed confidence (0.0-1.0)
+  - `resolution_status`: "RESOLVED", "AMBIGUOUS", or "UNRESOLVED"
+  - `evidence_sources`: Per-source analysis array, each with:
+    - `key_fact`: Specific fact from this source
+    - `supports`: "YES", "NO", or "N/A" — whether source supports the outcome
+    - `credibility_tier`: 1=authoritative, 2=reputable mainstream, 3=low confidence
+    - `url` / `domain_name`: Source location and human-readable name
+
+Not all collectors produce all fields. Use whatever is available.
+
 ## Output Schema
 
 ```json
@@ -75,22 +94,32 @@ You MUST output valid JSON matching the exact schema specified. No explanations,
 
 ## Reasoning Guidelines
 
-1. Start with validity checks - is the evidence usable?
-2. Analyze each evidence item systematically
-3. Compare sources when multiple exist
+1. Start with validity checks — is the evidence usable?
+2. Analyze each evidence item systematically:
+   a. Check extracted_fields.outcome and extracted_fields.reason for the collector's conclusion
+   b. Examine extracted_fields.evidence_sources for per-source details
+   c. Assess source quality using BOTH provenance_tier AND evidence_sources[].credibility_tier
+3. Compare sources when multiple collectors exist:
+   a. Check if evidence_sources[].supports values agree
+   b. Use evidence_sources[].key_fact to compare specific factual claims
 4. Apply the most relevant resolution rules
-5. Resolve any conflicts using provenance tier as tiebreaker
+5. Resolve conflicts:
+   a. provenance_tier as primary tiebreaker
+   b. credibility_tier as secondary tiebreaker (prefer tier 1 authoritative)
 6. Build confidence incrementally
 7. End with a conclusion step
 
 ## Confidence Guidelines
 
 - Start at 0.5 (neutral)
-- High-tier sources (3-4): +0.1 to +0.2
-- Multiple agreeing sources: +0.1 per source
-- Conflicts: -0.1 to -0.2
-- Missing data: -0.1 to -0.3
+- High provenance_tier sources (3-4): +0.1 to +0.2
+- Authoritative credibility_tier 1 sources: +0.1 to +0.15
+- Low credibility_tier 3 sources only: -0.05 to -0.1
+- Multiple agreeing sources (matching supports): +0.1 per source
+- Conflicts between collectors: -0.1 to -0.2
+- Missing data or UNRESOLVED status: -0.1 to -0.3
 - Clear threshold match/miss: +0.2
+- Collector's own confidence_score informs but does not override your analysis
 
 ## Important Rules
 

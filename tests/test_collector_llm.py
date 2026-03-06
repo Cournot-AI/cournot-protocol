@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from agents.collector.agent import CollectorWebPageReader, get_collector
+from unittest.mock import patch
+
+from agents.collector.agent import CollectorHyDE, CollectorWebPageReader, get_collector
 from agents.context import AgentContext
 from agents.base import AgentCapability, AgentStep
 from agents.registry import get_registry
@@ -434,3 +436,98 @@ class TestCollectorWebPageReaderDeferredDiscovery:
         )
         assert discover_call.input["requirement_id"] == "req_001"
         assert fetch_call.input["requirement_id"] == "req_002"
+
+
+# ---------------------------------------------------------------------------
+# HyDE extracted_fields consistency
+# ---------------------------------------------------------------------------
+
+def _hyde_synthesis_json(**overrides) -> str:
+    """Return a valid HyDE synthesis JSON response."""
+    data = {
+        "hypothesis_match": "CONFIRMED",
+        "reasoning_trace": "Source confirms BTC is above $100k.",
+        "parsed_value": "Yes",
+        "confidence_score": 0.9,
+        "evidence_sources": [
+            {
+                "url": "https://example.com/btc",
+                "domain_name": "example.com",
+                "key_fact": "BTC trading at $105,000",
+                "supports": "YES",
+                "credibility_tier": 2,
+            }
+        ],
+        "discrepancies": [],
+    }
+    data.update(overrides)
+    return json.dumps(data)
+
+
+def _hyde_hypothesis_json() -> str:
+    """Return a valid HyDE hypothesis JSON response."""
+    return json.dumps({
+        "hypothetical_document": "Bitcoin surpasses $100,000 milestone.",
+        "search_queries": ["bitcoin price above 100000"],
+        "key_phrases": ["bitcoin", "$100,000"],
+    })
+
+
+_FAKE_SEARCH_RESULTS = [
+    {
+        "title": "BTC hits $105k",
+        "snippet": "Bitcoin is trading at $105,000.",
+        "url": "https://example.com/btc",
+        "date": "2026-01-01",
+    },
+]
+
+
+class TestHyDEExtractedFieldsConsistency:
+    """HyDE extracted_fields must contain outcome and reason."""
+
+    @patch.object(CollectorHyDE, "_execute_search_queries", return_value=_FAKE_SEARCH_RESULTS)
+    def test_outcome_and_reason_in_extracted_fields(self, mock_search):
+        """HyDE extracted_fields should contain outcome and reason from synthesis."""
+        hypothesis_resp = _hyde_hypothesis_json()
+        synthesis_resp = _hyde_synthesis_json()
+
+        ctx = AgentContext.create_mock(llm_responses=[hypothesis_resp, synthesis_resp])
+
+        collector = CollectorHyDE()
+        result = collector.run(ctx, _make_prompt_spec(), _make_tool_plan())
+
+        assert result.success
+        bundle, _ = result.output
+        assert len(bundle.items) == 1
+        item = bundle.items[0]
+        assert item.success
+
+        ef = item.extracted_fields
+        assert ef["outcome"] == "Yes"
+        assert ef["reason"] == "Source confirms BTC is above $100k."
+        assert ef["confidence_score"] == 0.9
+        assert ef["resolution_status"] == "RESOLVED"
+
+    @patch.object(CollectorHyDE, "_execute_search_queries", return_value=_FAKE_SEARCH_RESULTS)
+    def test_outcome_none_when_unverified(self, mock_search):
+        """When synthesis has no parsed_value, outcome should be None."""
+        hypothesis_resp = _hyde_hypothesis_json()
+        synthesis_resp = _hyde_synthesis_json(
+            parsed_value=None,
+            hypothesis_match="UNVERIFIED",
+            confidence_score=0.3,
+        )
+
+        ctx = AgentContext.create_mock(llm_responses=[hypothesis_resp, synthesis_resp])
+
+        collector = CollectorHyDE()
+        result = collector.run(ctx, _make_prompt_spec(), _make_tool_plan())
+
+        assert result.success
+        bundle, _ = result.output
+        item = bundle.items[0]
+
+        ef = item.extracted_fields
+        assert ef["outcome"] is None
+        assert ef["resolution_status"] == "UNRESOLVED"
