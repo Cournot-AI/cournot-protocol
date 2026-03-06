@@ -758,6 +758,8 @@ class CollectorWebPageReader(BaseAgent):
             evidence_sources = _normalize_evidence_sources(raw_sources)
 
             extracted_fields = {
+                "outcome": data.get("parsed_value"),
+                "reason": data.get("reasoning_trace", ""),
                 "confidence_score": data.get("confidence_score"),
                 "resolution_status": data.get("resolution_status"),
                 "evidence_sources": evidence_sources,
@@ -859,6 +861,9 @@ class CollectorWebPageReader(BaseAgent):
         evidence_id = self._generate_evidence_id(requirement_id, target)
         content_summary = parsed.get("content_summary", "")
         extracted = self._truncate_extracted_fields(parsed.get("extracted_fields", {}))
+        # Ensure outcome/reason are always present for auditor consistency
+        extracted.setdefault("outcome", parsed.get("parsed_value"))
+        extracted.setdefault("reason", parsed.get("content_summary", ""))
         success = parsed.get("success", True)
 
         return EvidenceItem(
