@@ -295,6 +295,196 @@ Run the full resolution pipeline (collect → audit → judge → PoR bundle) in
 }
 ```
 
+### Dispute
+
+```bash
+POST /dispute
+```
+
+Stateless dispute-driven rerun of audit/judge steps. The frontend provides all context artifacts and a structured dispute request. Use this when the UI builds the full `DisputeRequest` directly.
+
+**Request Body:**
+```json
+{
+  "mode": "reasoning_only",
+  "reason_code": "EVIDENCE_MISREAD",
+  "message": "The evidence was misinterpreted — the deal was announced on Feb 25, not signed on Apr 30",
+  "target": {
+    "artifact": "evidence_bundle",
+    "leaf_path": "items[0].extracted_fields.outcome"
+  },
+  "prompt_spec": { "..." : "..." },
+  "evidence_bundle": { "..." : "..." },
+  "reasoning_trace": { "..." : "..." },
+  "patch": {
+    "evidence_items_append": [
+      {
+        "evidence_id": "new-item-1",
+        "requirement_id": "req_001",
+        "provenance": { "source_id": "manual", "source_uri": "https://example.com" },
+        "raw_content": "...",
+        "extracted_fields": { "outcome": "Yes", "reason": "..." }
+      }
+    ]
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mode` | `"reasoning_only"` \| `"full_rerun"` | no (default: `reasoning_only`) | `reasoning_only` reruns audit/judge with provided evidence. `full_rerun` re-collects evidence first. |
+| `case_id` | string | no | Optional dashboard correlation ID (stateless, no lookup) |
+| `reason_code` | enum | yes | `REASONING_ERROR`, `LOGIC_GAP`, `EVIDENCE_MISREAD`, `EVIDENCE_INSUFFICIENT`, `OTHER` |
+| `message` | string | yes | Dispute message (1–8000 chars) |
+| `target` | object | no | Which artifact/field is disputed |
+| `prompt_spec` | object | yes | Full PromptSpec from the previous run |
+| `evidence_bundle` | object | no | EvidenceBundle from the previous run |
+| `reasoning_trace` | object | no | ReasoningTrace (if present, allows judge-only rerun) |
+| `tool_plan` | object | no | Required for `full_rerun` mode |
+| `collectors` | list[string] | no | Required for `full_rerun` mode |
+| `patch` | object | no | `evidence_items_append` and/or `prompt_spec_override` |
+
+**Response:**
+```json
+{
+  "ok": true,
+  "case_id": null,
+  "rerun_plan": ["audit", "judge"],
+  "artifacts": {
+    "prompt_spec": { "..." : "..." },
+    "evidence_bundle": { "..." : "..." },
+    "evidence_bundles": [ { "..." : "..." } ],
+    "reasoning_trace": { "..." : "..." },
+    "verdict": { "..." : "..." }
+  },
+  "diff": {
+    "steps_rerun": ["audit", "judge"],
+    "verdict_changed": null
+  }
+}
+```
+
+### Dispute (LLM-Assisted)
+
+```bash
+POST /dispute/llm
+```
+
+Simplified dispute endpoint that accepts 3 user inputs and uses an LLM to translate natural language into a structured `DisputeRequest`, then delegates to the existing dispute logic. Returns the same response as `POST /dispute`.
+
+**Request Body:**
+```json
+{
+  "reason_code": "EVIDENCE_MISREAD",
+  "message": "Wikipedia shows PM Shmyhal announced a preliminary agreement on Feb 25 2025",
+  "evidence_urls": ["https://en.wikipedia.org/wiki/Ukraine%E2%80%93United_States_Mineral_Resources_Agreement"],
+  "prompt_spec": { "..." : "..." },
+  "evidence_bundle": { "..." : "..." },
+  "reasoning_trace": { "..." : "..." }
+}
+```
+
+| Field | Type | Required | UI Control | Description |
+|-------|------|----------|------------|-------------|
+| `reason_code` | enum | yes | Dropdown | `EVIDENCE_MISREAD`, `EVIDENCE_INSUFFICIENT`, `REASONING_ERROR`, `LOGIC_GAP`, `OTHER` |
+| `message` | string | yes | Textarea | Free-text dispute message (1–4000 chars) |
+| `evidence_urls` | list[string] | no | Repeatable URL input | Up to 5 URLs to fetch as supporting evidence |
+| `prompt_spec` | object | yes | auto | Full PromptSpec from the previous run |
+| `evidence_bundle` | object | no | auto | EvidenceBundle from the previous run |
+| `reasoning_trace` | object | no | auto | ReasoningTrace from the previous run |
+| `tool_plan` | object | no | auto | Only needed if LLM decides `full_rerun` |
+| `collectors` | list[string] | no | auto | Only needed if LLM decides `full_rerun` |
+
+The context fields (`prompt_spec`, `evidence_bundle`, `reasoning_trace`, `tool_plan`, `collectors`) are attached automatically by the frontend from the current case's artifacts — the user never configures these.
+
+**Response:** Same as `POST /dispute`.
+
+### Validate Market
+
+```bash
+POST /validate
+```
+
+Validate and compile a market query in a single call. Replaces the need to call both `/step/prompt` and a separate validation endpoint. Runs in parallel:
+1. **LLM validation** — classify market type, validate required fields, assess resolvability
+2. **Prompt compilation** — compile into PromptSpec + ToolPlan (same as `/step/prompt`)
+3. **Source reachability** — probes any data source URLs mentioned in the query to check if they are accessible by the AI (detects Cloudflare blocks, paywalls, timeouts)
+
+**Request Body:**
+```json
+{
+  "user_input": "Highest temperature in Buenos Aires on March 1? Resolves using Wunderground data for Minister Pistarini Intl Airport, °C. Resolution deadline: March 2, 2026, 12:00 PM ET.",
+  "strict_mode": true,
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `user_input` | string | yes | The prediction market query to validate and compile (1–8000 chars) |
+| `strict_mode` | bool | no | Enable strict mode for deterministic hashing (default: true) |
+| `llm_provider` | string | no | LLM provider override (e.g., `"openai"`, `"anthropic"`) |
+| `llm_model` | string | no | LLM model override (e.g., `"gpt-4o"`) |
+
+**Response:**
+```json
+{
+  "ok": true,
+  "classification": {
+    "market_type": "TEMPERATURE",
+    "confidence": 0.95,
+    "detection_rationale": "Contains 'temperature', city name, and date"
+  },
+  "validation": {
+    "checks_passed": ["U-02", "U-03", "TEMP-01", "TEMP-02", "TEMP-03"],
+    "checks_failed": [
+      {
+        "check_id": "TEMP-04",
+        "severity": "warning",
+        "message": "No fallback data source specified.",
+        "suggestion": "If data from Wunderground is unavailable, which alternative source should be used?"
+      }
+    ]
+  },
+  "resolvability": {
+    "score": 35,
+    "level": "MEDIUM",
+    "risk_factors": [
+      {"factor": "Single data source with no fallback", "points": 30},
+      {"factor": "No fallback rule for cancelled/postponed events", "points": 10}
+    ],
+    "recommendation": "Consider adding fallback data sources."
+  },
+  "source_reachability": [
+    {
+      "url": "https://www.wunderground.com",
+      "reachable": true,
+      "status_code": 200,
+      "error": null
+    }
+  ],
+  "market_id": "mk_6d3dc65b5bdabbe0",
+  "prompt_spec": { "..." : "..." },
+  "tool_plan": { "..." : "..." },
+  "prompt_metadata": { "compiler": "llm", "question_type": "temperature" },
+  "errors": []
+}
+```
+
+The `prompt_spec` and `tool_plan` fields can be passed directly to `/step/collect` or `/step/resolve` to continue the pipeline.
+
+**Market Types:** `FINANCIAL_PRICE`, `TEMPERATURE`, `CRYPTO_THRESHOLD`, `SPORTS_MATCH`, `SPORTS_EXACT_SCORE`, `SPORTS_PLAYER_PROP`, `SPEECH_CONTENT`, `GEOPOLITICAL_EVENT`, `BINARY_EVENT`, `MULTI_CHOICE_EVENT`, `OPINION_NOVELTY`, `UNKNOWN`.
+
+**Risk Levels:**
+
+| Score | Level | Meaning |
+|-------|-------|---------|
+| 0–15 | LOW | Approved for automated resolution |
+| 16–35 | MEDIUM | May have difficulty resolving automatically |
+| 36–55 | HIGH | High risk of failing automated resolution |
+| 56+ | VERY_HIGH | Unlikely to resolve automatically |
+
 ## Configuration
 
 ### Environment Variables
@@ -767,5 +957,7 @@ api/
     ├── steps.py       # Individual step execution (prompt, collect, audit, judge, bundle, resolve)
     ├── verify.py      # Pack verification
     ├── replay.py      # Evidence replay
-    └── capabilities.py # Agent/provider discovery
+    ├── capabilities.py # Agent/provider discovery
+    ├── dispute.py     # Dispute endpoints (structured + LLM-assisted)
+    └── validate.py    # Market creation validator (classify + validate + resolvability)
 ```
