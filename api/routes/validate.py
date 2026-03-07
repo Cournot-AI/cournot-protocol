@@ -173,9 +173,19 @@ Classify into exactly one of these types based on the market query:
 | U-03 | Description specifies a resolution deadline with timezone | "Please specify the exact deadline with timezone. e.g., 'February 25, 2026, 4:00 PM ET'" |
 | U-04 | Description defines what "Yes" and "No" mean (for binary markets) | "Please define exactly what constitutes a 'Yes' resolution. Be specific about thresholds, actions, or conditions." |
 | U-05 | Possible outcomes are explicitly listed (for multi-choice) | "Please list all possible outcomes. For multi-choice markets, each outcome must be mutually exclusive and collectively exhaustive." |
-| U-06 | Description includes a fallback/edge-case rule | "What happens if the event is cancelled, postponed, or data is unavailable? Please add a fallback resolution rule." |
+| U-06 | Description includes a fallback rule for event edge cases | "What happens if the event is cancelled, postponed, or otherwise does not occur as expected? Please add a fallback resolution rule." |
+| U-07 | Description specifies a fallback data source or consensus-based resolution | "Your market specifies only one data source. If that source is unavailable (site down, blocked by Cloudflare, data not published), how should the market resolve? Please add a fallback such as: 'If the primary source is unavailable, resolution may use a consensus of credible reporting from major news agencies (AP, Reuters, BBC, etc.).' or specify an alternative data source URL." |
 
 Apply U-04 only to binary markets. Apply U-05 only to multi-choice markets.
+
+IMPORTANT for U-07:
+- If the market specifies only ONE data source URL and does NOT include any consensus/fallback
+  language, U-07 MUST FAIL. This is critical — single-source markets fail at ~2x the rate.
+- If the market specifies multiple data sources, or includes consensus/news-based fallback
+  language (e.g., "consensus of credible reporting", "multiple credible sources", "major news
+  outlets"), U-07 PASSES.
+- U-07 is separate from U-06. U-06 is about event edge cases (cancelled, postponed). U-07 is
+  about data source redundancy.
 
 ### Type-specific checks:
 
@@ -238,19 +248,24 @@ Apply U-04 only to binary markets. Apply U-05 only to multi-choice markets.
 
 Assign risk points based on these factors:
 
-| Risk Factor | Points |
-|---|---|
-| Single data source with no fallback | +30 |
-| Data source requires web scraping (TradingView, specific URLs) | +20 |
-| Data source is Wunderground only | +25 |
-| Market requires real-time or near-real-time data | +15 |
-| Market requires transcript/video analysis | +35 |
-| Market has subjective resolution criteria | +40 |
-| Title contains ___ or unclear placeholder | +20 |
-| No fallback rule for cancelled/postponed events | +10 |
-| Event is inherently random (coin toss, exact sports score) | +15 |
-| Multiple independent conditions | +10 |
-| Data source likely behind Cloudflare/paywall (non-API news sites, etc.) | +20 |
+| Risk Factor | Points | Related Check |
+|---|---|---|
+| Single data source with no fallback (no consensus, no alternative URL) | +30 | U-07 fail |
+| Data source requires web scraping (TradingView, specific URLs) | +20 | |
+| Data source is Wunderground only | +25 | |
+| Market requires real-time or near-real-time data | +15 | |
+| Market requires transcript/video analysis | +35 | |
+| Market has subjective resolution criteria | +40 | |
+| Title contains ___ or unclear placeholder | +20 | U-01 fail |
+| No fallback rule for cancelled/postponed events | +10 | U-06 fail |
+| Event is inherently random (coin toss, exact sports score) | +15 | |
+| Multiple independent conditions | +10 | |
+| Data source likely behind Cloudflare/paywall (non-API news sites, etc.) | +20 | |
+
+IMPORTANT: The "Single data source with no fallback" risk factor (+30) MUST be applied
+when U-07 fails. These are linked — if U-07 fails, this risk factor applies. If U-07
+passes (because the market has consensus language or multiple sources), this risk factor
+MUST NOT be applied.
 
 Risk levels:
 - 0-15: LOW — approved for automated resolution
