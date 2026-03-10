@@ -3,8 +3,9 @@ Tests for temporal_context injection into auditor and judge prompts.
 
 Verifies that when temporal_constraint data is present in ctx.extra["temporal_context"],
 the auditor (LLMReasoner) and judge (JudgeLLM) inject a TEMPORAL ADVISORY
-block into their LLM messages, computing the temporal status (FUTURE/ACTIVE/PAST)
-at resolution time from event_time vs current_time.
+block into their LLM messages, computing the temporal status
+(DEADLINE_OPEN/DEADLINE_RECENT/DEADLINE_PASSED) at resolution time from
+event_time (deadline) vs current_time.
 """
 
 from __future__ import annotations
@@ -155,16 +156,16 @@ SAMPLE_TEMPORAL_FUTURE = {
     "reason": "Match is scheduled for Sep 23 2026",
 }
 
-SAMPLE_TEMPORAL_ACTIVE = {
+SAMPLE_TEMPORAL_RECENT = {
     "enabled": True,
-    "event_time": "2026-01-01T06:00:00Z",  # 6 hours after FROZEN_NOW → within 24h → ACTIVE
-    "reason": "Event recently started",
+    "event_time": "2025-12-31T18:00:00Z",  # 6 hours before FROZEN_NOW → within 24h → DEADLINE_RECENT
+    "reason": "Deadline recently passed",
 }
 
-SAMPLE_TEMPORAL_PAST = {
+SAMPLE_TEMPORAL_PASSED = {
     "enabled": True,
-    "event_time": "2025-06-15T00:00:00Z",  # well before 2026-01-01 → PAST
-    "reason": "Event concluded in June 2025",
+    "event_time": "2025-06-15T00:00:00Z",  # well before 2026-01-01 → DEADLINE_PASSED
+    "reason": "Deadline passed in June 2025",
 }
 
 
@@ -206,22 +207,21 @@ def _make_mock_ctx(
 # ---------------------------------------------------------------------------
 
 class TestResolveTemporalStatus:
-    """Test the status computation from event_time vs current_time."""
+    """Test the status computation from event_time (deadline) vs current_time."""
 
-    def test_future_event(self):
+    def test_deadline_open(self):
         status = _resolve_temporal_status("2026-09-23T00:00:00Z", FROZEN_NOW)
-        assert status == "FUTURE"
+        assert status == "DEADLINE_OPEN"
 
-    def test_active_event_within_24h(self):
-        # event_time is 6 hours AFTER frozen now — still FUTURE
-        # but let's test with event_time slightly before now
+    def test_deadline_recent_within_24h(self):
+        # deadline is 6 hours BEFORE frozen now — within 24h window
         past_6h = datetime(2025, 12, 31, 18, 0, 0, tzinfo=timezone.utc)
         status = _resolve_temporal_status(past_6h.isoformat(), FROZEN_NOW)
-        assert status == "ACTIVE"
+        assert status == "DEADLINE_RECENT"
 
-    def test_past_event(self):
+    def test_deadline_passed(self):
         status = _resolve_temporal_status("2025-06-15T00:00:00Z", FROZEN_NOW)
-        assert status == "PAST"
+        assert status == "DEADLINE_PASSED"
 
     def test_invalid_event_time(self):
         status = _resolve_temporal_status("not-a-date", FROZEN_NOW)
@@ -244,51 +244,51 @@ class TestResolveTemporalStatus:
 class TestBuildTemporalContextPrompt:
     """Test the prompt builder functions directly."""
 
-    def test_auditor_prompt_future(self):
+    def test_auditor_prompt_deadline_open(self):
         prompt = LLMReasoner._build_temporal_context_prompt(SAMPLE_TEMPORAL_FUTURE, FROZEN_NOW)
 
         assert "TEMPORAL ADVISORY" in prompt
-        assert "Temporal status: FUTURE" in prompt
+        assert "Temporal status: DEADLINE_OPEN" in prompt
         assert "2026-09-23T00:00:00Z" in prompt
-        assert "MUST return preliminary_outcome = INVALID" in prompt
+        assert "MUST NOT return NO" in prompt
+        assert "CAN return YES" in prompt
 
-    def test_auditor_prompt_active(self):
-        # Use a current_time that makes SAMPLE_TEMPORAL_ACTIVE's event_time in the past 24h
+    def test_auditor_prompt_deadline_recent(self):
         now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        prompt = LLMReasoner._build_temporal_context_prompt(SAMPLE_TEMPORAL_ACTIVE, now)
+        prompt = LLMReasoner._build_temporal_context_prompt(SAMPLE_TEMPORAL_RECENT, now)
 
         assert "TEMPORAL ADVISORY" in prompt
-        assert "Temporal status: ACTIVE" in prompt
-        assert "CONCLUDED outcome" in prompt
-        assert "INVALID, not NO" in prompt
+        assert "Temporal status: DEADLINE_RECENT" in prompt
+        assert "recently" in prompt
 
-    def test_auditor_prompt_past(self):
-        prompt = LLMReasoner._build_temporal_context_prompt(SAMPLE_TEMPORAL_PAST, FROZEN_NOW)
+    def test_auditor_prompt_deadline_passed(self):
+        prompt = LLMReasoner._build_temporal_context_prompt(SAMPLE_TEMPORAL_PASSED, FROZEN_NOW)
 
         assert "TEMPORAL ADVISORY" in prompt
-        assert "Temporal status: PAST" in prompt
+        assert "Temporal status: DEADLINE_PASSED" in prompt
         assert "Evaluate evidence normally" in prompt
 
-    def test_judge_prompt_future(self):
+    def test_judge_prompt_deadline_open(self):
         prompt = JudgeLLM._build_temporal_context_prompt(SAMPLE_TEMPORAL_FUTURE, FROZEN_NOW)
 
         assert "TEMPORAL ADVISORY" in prompt
-        assert "Temporal status: FUTURE" in prompt
-        assert "MUST return outcome = INVALID" in prompt
+        assert "Temporal status: DEADLINE_OPEN" in prompt
+        assert "MUST NOT return NO" in prompt
+        assert "CAN return YES" in prompt
 
-    def test_judge_prompt_active(self):
+    def test_judge_prompt_deadline_recent(self):
         now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        prompt = JudgeLLM._build_temporal_context_prompt(SAMPLE_TEMPORAL_ACTIVE, now)
+        prompt = JudgeLLM._build_temporal_context_prompt(SAMPLE_TEMPORAL_RECENT, now)
 
         assert "TEMPORAL ADVISORY" in prompt
-        assert "Temporal status: ACTIVE" in prompt
-        assert "override to INVALID" in prompt
+        assert "Temporal status: DEADLINE_RECENT" in prompt
+        assert "recently" in prompt
 
-    def test_judge_prompt_past(self):
-        prompt = JudgeLLM._build_temporal_context_prompt(SAMPLE_TEMPORAL_PAST, FROZEN_NOW)
+    def test_judge_prompt_deadline_passed(self):
+        prompt = JudgeLLM._build_temporal_context_prompt(SAMPLE_TEMPORAL_PASSED, FROZEN_NOW)
 
         assert "TEMPORAL ADVISORY" in prompt
-        assert "Temporal status: PAST" in prompt
+        assert "Temporal status: DEADLINE_PASSED" in prompt
         assert "normally" in prompt
 
     def test_prompt_includes_current_time(self):
@@ -343,7 +343,7 @@ class TestAuditorTemporalContextInjection:
             if m.get("role") == "user" and "## TEMPORAL ADVISORY" in m.get("content", "")
         ]
         assert len(temporal_messages) == 1
-        assert "Temporal status: FUTURE" in temporal_messages[0]["content"]
+        assert "Temporal status: DEADLINE_OPEN" in temporal_messages[0]["content"]
         assert "2026-09-23T00:00:00Z" in temporal_messages[0]["content"]
 
     def test_no_temporal_context_no_injection(self):
@@ -412,7 +412,7 @@ class TestAuditorTemporalContextInjection:
     def test_past_event_still_injected(self):
         """Even for past events, temporal advisory is injected (says 'evaluate normally')."""
         ctx = _make_mock_ctx(
-            temporal_context=SAMPLE_TEMPORAL_PAST,
+            temporal_context=SAMPLE_TEMPORAL_PASSED,
             llm_response=self._make_valid_llm_response(),
         )
         reasoner = LLMReasoner(strict_mode=True)
@@ -429,7 +429,7 @@ class TestAuditorTemporalContextInjection:
             if m.get("role") == "user" and "## TEMPORAL ADVISORY" in m.get("content", "")
         ]
         assert len(temporal_messages) == 1
-        assert "Temporal status: PAST" in temporal_messages[0]["content"]
+        assert "Temporal status: DEADLINE_PASSED" in temporal_messages[0]["content"]
 
 
 # ---------------------------------------------------------------------------
@@ -470,7 +470,7 @@ class TestJudgeTemporalContextInjection:
             if m.get("role") == "user" and "## TEMPORAL ADVISORY" in m.get("content", "")
         ]
         assert len(temporal_messages) == 1
-        assert "Temporal status: FUTURE" in temporal_messages[0]["content"]
+        assert "Temporal status: DEADLINE_OPEN" in temporal_messages[0]["content"]
         assert "INVALID" in temporal_messages[0]["content"]
 
     def test_no_temporal_context_no_injection(self):

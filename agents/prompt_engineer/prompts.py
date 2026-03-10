@@ -108,7 +108,7 @@ You do NOT decide whether the event is future or past — that is computed at re
 
 **Fields:**
 - `enabled`: Always `true` when included (omit the entire object if not applicable)
-- `event_time`: The specific date/time the event is scheduled for or expected to conclude, in ISO 8601 UTC format
+- `event_time`: The **deadline** — the latest date/time by which the event must occur, in ISO 8601 format with timezone. The event can happen at any time before this deadline.
 - `reason`: Brief explanation of why temporal awareness matters for this question
 
 **When to include temporal_constraint:**

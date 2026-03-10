@@ -149,15 +149,20 @@ Silence is not evidence. "I searched and found nothing" is UNCERTAIN, not NO.
 
 ## CRITICAL — Temporal Reasoning
 
-If a TEMPORAL ADVISORY is provided in the conversation:
-- **FUTURE**: The event has NOT started yet. Regardless of how confident the evidence
-  appears, a future event cannot have a definitive outcome. Return INVALID with low
-  confidence (e.g. 0.2-0.3) and note that the event has not occurred yet.
-- **ACTIVE**: The event is currently in progress. Only return YES or NO if evidence
-  confirms a concluded outcome within the active window. "No evidence yet" during an
-  active event window is INVALID, not NO — the event may still produce a result.
-- **PAST**: No special handling needed — evaluate evidence normally.
-- Compare the timeframe in Prediction Semantics against the event_time in the
+If a TEMPORAL ADVISORY is provided in the conversation, the event_time is a **deadline**
+(the latest time by which the event must occur), NOT the exact time the event happens.
+The event can occur at any time before the deadline.
+
+- **DEADLINE_OPEN**: The deadline has NOT passed yet.
+  - If evidence shows the event ALREADY HAPPENED before the deadline → return YES.
+  - You MUST NOT return NO — the event could still happen before the deadline.
+  - If no evidence that the event occurred yet → return INVALID with low confidence.
+- **DEADLINE_RECENT**: The deadline passed within the last 24 hours.
+  - Evidence of the final state may still be emerging.
+  - YES if evidence confirms the event occurred. NO if evidence confirms it did not
+    and the deadline has passed. INVALID if unclear.
+- **DEADLINE_PASSED**: The deadline has passed — evaluate evidence normally.
+- Compare the timeframe in Prediction Semantics against the deadline in the
   TEMPORAL ADVISORY and the current date to check consistency.
 """
 

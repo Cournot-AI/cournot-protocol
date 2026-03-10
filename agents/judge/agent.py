@@ -38,11 +38,17 @@ if TYPE_CHECKING:
 
 
 def _resolve_temporal_status(event_time_raw: str, current_time: datetime) -> str:
-    """Compute FUTURE/ACTIVE/PAST from event_time vs current_time.
+    """Compute DEADLINE_OPEN/DEADLINE_RECENT/DEADLINE_PASSED from event_time vs current_time.
 
-    - FUTURE: event_time is after current_time
-    - ACTIVE: event_time is within the past 24 hours
-    - PAST: event_time is more than 24 hours before current_time
+    event_time represents the **deadline** by which the event must occur, not
+    necessarily when the event happens.  The event can occur at any time before
+    the deadline.
+
+    - DEADLINE_OPEN: deadline is still in the future — the event may have
+      already happened (allow YES) but cannot be ruled out (block NO).
+    - DEADLINE_RECENT: deadline passed within the last 24 hours — evidence of
+      the final state may still be emerging.
+    - DEADLINE_PASSED: deadline passed more than 24 hours ago — resolve normally.
     """
     try:
         event_dt = datetime.fromisoformat(event_time_raw.replace("Z", "+00:00"))
@@ -55,11 +61,11 @@ def _resolve_temporal_status(event_time_raw: str, current_time: datetime) -> str
         current_time = current_time.replace(tzinfo=timezone.utc)
 
     if event_dt > current_time:
-        return "FUTURE"
+        return "DEADLINE_OPEN"
     elif current_time - event_dt < timedelta(hours=24):
-        return "ACTIVE"
+        return "DEADLINE_RECENT"
     else:
-        return "PAST"
+        return "DEADLINE_PASSED"
 
 
 class JudgeLLM(BaseAgent):
@@ -386,35 +392,44 @@ class JudgeLLM(BaseAgent):
             "## TEMPORAL ADVISORY",
             "",
             f"Temporal status: {status}",
-            f"Event time: {event_time_raw}",
+            f"Resolution deadline: {event_time_raw}",
             f"Current time: {current_time.isoformat()}",
             f"Reason: {reason}",
             "",
         ]
 
-        if status == "FUTURE":
+        if status == "DEADLINE_OPEN":
             parts.extend([
                 "INSTRUCTIONS:",
-                "1) This event has NOT happened yet. It is scheduled for the future.",
-                "2) You MUST return outcome = INVALID regardless of the Auditor's",
-                "   preliminary outcome or evidence confidence.",
-                "3) Set confidence to a low value (0.2-0.3).",
-                "4) In final_justification, note that the event is in the future",
-                "   and cannot be resolved yet.",
+                "The resolution deadline has NOT passed yet. The event may occur at",
+                "any time before the deadline — it does NOT have to happen at the",
+                "exact deadline time.",
+                "",
+                "1) If evidence shows the event ALREADY HAPPENED before the deadline,",
+                "   you CAN return YES with appropriate confidence.",
+                "2) You MUST NOT return NO — the event could still happen before the",
+                "   deadline. Absence of evidence is not evidence of absence.",
+                "3) If no evidence confirms the event has occurred yet, return INVALID",
+                "   with low confidence (0.2-0.3) and note the deadline has not passed.",
+                "4) If the Auditor returned NO, override to INVALID — we cannot rule",
+                "   out the event occurring before the deadline.",
             ])
-        elif status == "ACTIVE":
+        elif status == "DEADLINE_RECENT":
             parts.extend([
                 "INSTRUCTIONS:",
-                "1) This event is currently in progress or recently started.",
-                "2) If the Auditor returned YES or NO without post-conclusion evidence,",
-                "   override to INVALID — the event has not concluded yet.",
-                "3) Only confirm YES or NO if evidence shows the event has reached a",
-                "   definitive conclusion within the active window.",
+                "The resolution deadline passed very recently (within 24 hours).",
+                "Evidence of the final state may still be emerging.",
+                "",
+                "1) If evidence confirms the event occurred before the deadline,",
+                "   return YES.",
+                "2) If evidence confirms the event did NOT occur and the deadline has",
+                "   now passed, you may return NO.",
+                "3) If evidence is still unclear or emerging, return INVALID.",
             ])
         else:
             parts.extend([
                 "INSTRUCTIONS:",
-                "1) This event is in the past. Evaluate the Auditor's reasoning normally.",
+                "1) The deadline has passed. Evaluate the Auditor's reasoning normally.",
             ])
 
         return "\n".join(parts)

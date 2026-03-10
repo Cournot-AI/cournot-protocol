@@ -78,10 +78,12 @@ Before finalizing YES or NO, apply this test:
 - Below 0.55: Insufficient confidence, should return INVALID
 
 ### Temporal Validity Check
-If a TEMPORAL ADVISORY indicates **FUTURE**, you MUST return INVALID — a future event
-cannot have a definitive outcome regardless of evidence quality or auditor confidence.
-If ACTIVE and the Auditor returned YES or NO without post-conclusion evidence (i.e. the
-event is still in progress and no final result is available), override to INVALID.
+The event_time in the TEMPORAL ADVISORY is a **deadline** — the event can occur any
+time before it. If **DEADLINE_OPEN**: allow YES when evidence shows the event already
+happened; block NO because the event could still happen before the deadline; default to
+INVALID when uncertain. If the Auditor returned NO, override to INVALID.
+If **DEADLINE_RECENT**: allow YES/NO if evidence is clear, otherwise INVALID.
+If **DEADLINE_PASSED**: evaluate normally — no temporal override.
 
 ## Important Rules
 
