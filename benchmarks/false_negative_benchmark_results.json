@@ -1,0 +1,638 @@
+{
+  "benchmark": "false_negative_bias_fix",
+  "timestamp": "2026-03-10T11:11:49Z",
+  "config": {
+    "collectors": [
+      "CollectorOpenSearch",
+      "CollectorOpenSearch",
+      "CollectorOpenSearch"
+    ],
+    "max_workers": 10
+  },
+  "summary": {
+    "total": 34,
+    "matches": 0,
+    "mismatches": 4,
+    "invalids": 30,
+    "errors": 0,
+    "fn_fixed_to_yes": 0,
+    "fn_fixed_to_invalid": 30,
+    "fn_still_no": 4,
+    "improvement_rate": 0.8823529411764706,
+    "elapsed_seconds": 815.162300825119
+  },
+  "results": [
+    {
+      "event_id": 100280793762136,
+      "title": "Will Kimmel say \"Apologize\" or \"Sorry\" 5+ times during return show on September 23?",
+      "ground_truth": "Yes",
+      "ai_outcome": "NO",
+      "ai_confidence": 0.9,
+      "match": false,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "NO"
+    },
+    {
+      "event_id": 117501390788988,
+      "title": "Will Karoline Leavitt say \"Million\" or \"Billion\" or \"Trillion\" 10+ times during next White House press briefing?",
+      "ground_truth": "Yes",
+      "ai_outcome": "NO",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "NO"
+    },
+    {
+      "event_id": 113017701484511,
+      "title": "Will Kanye have no token before April",
+      "ground_truth": "Yes",
+      "ai_outcome": "NO",
+      "ai_confidence": 0.9,
+      "match": false,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "NO"
+    },
+    {
+      "event_id": 200616512682992,
+      "title": "Will Fartcoin reach $1.50 before June?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 277331414299232,
+      "title": "Will Russia capture Huliaipole by January 31?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 55091239371859,
+      "title": "Will December 2025 be the 4th or lower hottest on record?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 98171228668577,
+      "title": "Will Trump say \"Thousand / Million / Billion\" 12+ times during events with UK Prime Minister on September 18?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 234242767529115,
+      "title": "Will Luigi Mangione smile during next court appearance?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 207707967723346,
+      "title": "Will May 2024 show an increase between 1.10\u00b0C-1.16\u00b0C",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 101490477667923,
+      "title": "Will Russia capture Novopavlivka by December 31?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 261023199877050,
+      "title": "Will Russia capture Ivanopillya by November 30?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 29976825469403,
+      "title": "Will KJP say \"Ukraine\" during press briefing?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 147351661703044,
+      "title": "XRP all time high before 2026?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 195961144134463,
+      "title": "Will Alexandria Ocasio-Cortez be named in newly released Epstein files?",
+      "ground_truth": "Yes",
+      "ai_outcome": "NO",
+      "ai_confidence": 0.9,
+      "match": false,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "NO"
+    },
+    {
+      "event_id": 187478623420925,
+      "title": "Will \"Michael\" or \"Burry\" be said on the next episode of the All-In Podcast?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 26352915578343,
+      "title": "Will there be an on-stage brawl during the official weigh-in?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 120873955452217,
+      "title": "Will either fighter be knocked down in Round 1?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 183951019926056,
+      "title": "Will Glen Powell say \"Texas\" during Saturday Night Live on November 15?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 139943368832292,
+      "title": "Will Remilio flip MAYC in April?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 58927118180803,
+      "title": "Will NYC record precipitation on exactly 11 days in December?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 177717133336779,
+      "title": "Lighter Airdrop on December 30?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 246466771031522,
+      "title": "Will Taylor Swift say \"Eras\" or \"Tour\" 10+ times on The Late Show on December 10?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 7842044102910,
+      "title": "Will OpenAI have the best AI model for coding at the end of 2025?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 162002133056138,
+      "title": "2025 September second hottest on record?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 117260473867706,
+      "title": "Will Other be the #1 searched TV show on Google this year?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 162794971055601,
+      "title": "Karen Read acquitted on all charges?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 126946363965282,
+      "title": "Will anyone say \"Banking system\" 6+ times during the FED board meeting on October 24?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 38026769046880,
+      "title": "Will xAI have the #3 AI model at the end of December 2025?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 48061183418475,
+      "title": "Will OpenTable\u2019s \u201cSeated diners from online, phone, and walk-in reservations\u201d data point for the United States exceed its 2019 baseline by 7% or more by November 1, 2021?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 208647089079672,
+      "title": "Will the Australian hero donation campaign raise between $2.25 million and $2.5 million by December 16?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 203751406017129,
+      "title": "Will the US add between 0 and 25k jobs in September?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 238823861171502,
+      "title": "Will there be an Emergency Use Authorization (EUA) granted for a COVID-19 vaccine prior to Nov 3 2020?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 24294443550996,
+      "title": "Magnificent 7 shrinks below 30% of S&P 500 in 2025?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": 123163946320938,
+      "title": "Will xAI have a #1 AI model this year?",
+      "ground_truth": "Yes",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "audit",
+        "judge"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    }
+  ]
+}

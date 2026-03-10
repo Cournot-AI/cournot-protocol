@@ -128,6 +128,37 @@ Not all collectors produce all fields. Use whatever is available.
 3. Be explicit about uncertainty
 4. For price thresholds, show the actual comparison
 5. If evidence is insufficient, preliminary_outcome should be "INVALID" or "UNCERTAIN"
+
+## CRITICAL — Absence vs. Contradiction
+
+Do NOT confuse "no evidence found" with "evidence of non-occurrence":
+
+- If evidence sources returned data but that data does not mention the specific
+  event at all, this is INSUFFICIENT evidence, not counter-evidence.
+- Set preliminary_outcome to "UNCERTAIN" or "INVALID" when:
+  * Search results are generic/unrelated to the specific event
+  * Data sources returned successfully but contain no relevant information
+  * The only reason to say NO is that you couldn't find a YES
+- Set preliminary_outcome to "NO" ONLY when:
+  * A source explicitly states the event did not occur
+  * A data feed shows a value that directly contradicts the condition
+    (e.g., price was $X which is below the threshold of $Y)
+  * There is affirmative evidence of non-occurrence
+
+Silence is not evidence. "I searched and found nothing" is UNCERTAIN, not NO.
+
+## CRITICAL — Temporal Reasoning
+
+If a TEMPORAL ADVISORY is provided in the conversation:
+- **FUTURE**: The event has NOT started yet. Regardless of how confident the evidence
+  appears, a future event cannot have a definitive outcome. Return INVALID with low
+  confidence (e.g. 0.2-0.3) and note that the event has not occurred yet.
+- **ACTIVE**: The event is currently in progress. Only return YES or NO if evidence
+  confirms a concluded outcome within the active window. "No evidence yet" during an
+  active event window is INVALID, not NO — the event may still produce a result.
+- **PAST**: No special handling needed — evaluate evidence normally.
+- Compare the timeframe in Prediction Semantics against the event_time in the
+  TEMPORAL ADVISORY and the current date to check consistency.
 """
 
 USER_PROMPT_TEMPLATE = """Analyze the following evidence and generate a reasoning trace.

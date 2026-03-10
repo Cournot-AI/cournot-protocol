@@ -312,6 +312,8 @@ class LLMPromptCompiler:
                 "compiler": "llm",
                 "assumptions": data.get("assumptions", []),
                 "confidence_policy": data.get("confidence_policy", {}),
+                **({"temporal_constraint": data["temporal_constraint"]}
+                   if data.get("temporal_constraint") else {}),
             },
         )
         

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any, TYPE_CHECKING
 
 from agents.base import AgentCapability, AgentResult, AgentStep, BaseAgent
@@ -34,6 +35,31 @@ from .prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 
 if TYPE_CHECKING:
     from agents.context import AgentContext
+
+
+def _resolve_temporal_status(event_time_raw: str, current_time: datetime) -> str:
+    """Compute FUTURE/ACTIVE/PAST from event_time vs current_time.
+
+    - FUTURE: event_time is after current_time
+    - ACTIVE: event_time is within the past 24 hours
+    - PAST: event_time is more than 24 hours before current_time
+    """
+    try:
+        event_dt = datetime.fromisoformat(event_time_raw.replace("Z", "+00:00"))
+        if event_dt.tzinfo is None:
+            event_dt = event_dt.replace(tzinfo=timezone.utc)
+    except (ValueError, AttributeError):
+        return "UNKNOWN"
+
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+
+    if event_dt > current_time:
+        return "FUTURE"
+    elif current_time - event_dt < timedelta(hours=24):
+        return "ACTIVE"
+    else:
+        return "PAST"
 
 
 class JudgeLLM(BaseAgent):
@@ -214,7 +240,17 @@ class JudgeLLM(BaseAgent):
         dispute_ctx = ctx.extra.get("dispute_context")
         if dispute_ctx:
             messages.append({"role": "user", "content": self._build_dispute_prompt(dispute_ctx)})
-        
+
+        # Inject quality context if present (from quality check scorecard)
+        quality_ctx = ctx.extra.get("quality_context")
+        if quality_ctx:
+            messages.append({"role": "user", "content": self._build_quality_context_prompt(quality_ctx)})
+
+        # Inject temporal context if present
+        temporal_ctx = ctx.extra.get("temporal_context")
+        if temporal_ctx:
+            messages.append({"role": "user", "content": self._build_temporal_context_prompt(temporal_ctx, ctx.now())})
+
         # Get LLM response
         response = ctx.llm.chat(messages)
         raw_output = response.content
@@ -285,7 +321,104 @@ class JudgeLLM(BaseAgent):
             ]
         )
         return "\n".join(parts)
-    
+
+    @staticmethod
+    def _build_quality_context_prompt(quality_ctx: dict[str, Any]) -> str:
+        """Build an evidence quality advisory block for the Judge LLM.
+
+        Informs the judge about evidence quality issues so it can override
+        the auditor's preliminary outcome when evidence is unreliable.
+        """
+        parts: list[str] = [
+            "## EVIDENCE QUALITY ADVISORY",
+            "",
+            f"Quality level: {quality_ctx.get('quality_level', 'UNKNOWN')}",
+            f"Meets threshold: {quality_ctx.get('meets_threshold', 'unknown')}",
+        ]
+
+        flags = quality_ctx.get("quality_flags", [])
+        if flags:
+            parts.append(f"Quality flags: {', '.join(flags)}")
+
+        source_match = quality_ctx.get("source_match")
+        if source_match:
+            parts.append(f"Source match: {source_match}")
+
+        recommendations = quality_ctx.get("recommendations", [])
+        if recommendations:
+            parts.append("")
+            parts.append("Issues identified:")
+            for rec in recommendations:
+                parts.append(f"- {rec}")
+
+        parts.extend([
+            "",
+            "INSTRUCTIONS:",
+            "1) The quality check found that the collected evidence has significant",
+            "   reliability issues. Factor this into your final verdict.",
+            "2) If source_match is NONE, the evidence was NOT from the required",
+            "   authoritative sources. A definitive YES or NO based on wrong-source",
+            "   evidence is NOT justified — return INVALID instead.",
+            "3) If the Auditor returned YES or NO despite LOW quality evidence,",
+            "   you should override to INVALID unless you have strong reason to",
+            "   trust the evidence despite the quality flags.",
+            "4) Include evidence quality assessment in final_justification.",
+        ])
+        return "\n".join(parts)
+
+    @staticmethod
+    def _build_temporal_context_prompt(
+        temporal_ctx: dict[str, Any],
+        current_time: datetime,
+    ) -> str:
+        """Build a temporal advisory block for the Judge LLM.
+
+        Computes the temporal status (FUTURE/ACTIVE/PAST) at resolution time
+        by comparing the event_time against current_time, then informs the
+        judge so it can override the auditor for future/active events.
+        """
+        event_time_raw = temporal_ctx.get("event_time", "")
+        reason = temporal_ctx.get("reason", "No reason provided")
+
+        status = _resolve_temporal_status(event_time_raw, current_time)
+
+        parts: list[str] = [
+            "## TEMPORAL ADVISORY",
+            "",
+            f"Temporal status: {status}",
+            f"Event time: {event_time_raw}",
+            f"Current time: {current_time.isoformat()}",
+            f"Reason: {reason}",
+            "",
+        ]
+
+        if status == "FUTURE":
+            parts.extend([
+                "INSTRUCTIONS:",
+                "1) This event has NOT happened yet. It is scheduled for the future.",
+                "2) You MUST return outcome = INVALID regardless of the Auditor's",
+                "   preliminary outcome or evidence confidence.",
+                "3) Set confidence to a low value (0.2-0.3).",
+                "4) In final_justification, note that the event is in the future",
+                "   and cannot be resolved yet.",
+            ])
+        elif status == "ACTIVE":
+            parts.extend([
+                "INSTRUCTIONS:",
+                "1) This event is currently in progress or recently started.",
+                "2) If the Auditor returned YES or NO without post-conclusion evidence,",
+                "   override to INVALID — the event has not concluded yet.",
+                "3) Only confirm YES or NO if evidence shows the event has reached a",
+                "   definitive conclusion within the active window.",
+            ])
+        else:
+            parts.extend([
+                "INSTRUCTIONS:",
+                "1) This event is in the past. Evaluate the Auditor's reasoning normally.",
+            ])
+
+        return "\n".join(parts)
+
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from LLM response."""
         # Try code block

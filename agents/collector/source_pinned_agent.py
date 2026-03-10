@@ -93,11 +93,19 @@ You MUST respond with ONLY the following JSON object and nothing else.
 Do NOT use markdown fences. Do NOT add extra keys.
 The JSON MUST have exactly these two keys: "outcome" and "reason".
 
-{"outcome": "Yes or No", "reason": "Brief explanation citing the specific evidence found"}
+{"outcome": "Yes or No or Unresolved", "reason": "Brief explanation citing the specific evidence found"}
 
-- "outcome" must be exactly "Yes" or "No" (capitalized first letter).
+- "outcome" must be exactly "Yes", "No", or "Unresolved" (capitalized first letter).
 - "reason" must be a brief string explaining your verdict with the
   exact data value found and its source.
+
+CRITICAL — When to use "Unresolved":
+- If the resolution source (video, audio, transcript, specific dataset) is not
+  available or you cannot access it, return "Unresolved". Do NOT guess "No".
+- If you searched but found no information about whether the event occurred,
+  return "Unresolved". Absence of evidence is NOT evidence of absence.
+- "No" means you found SPECIFIC EVIDENCE that the event did NOT occur.
+- "Unresolved" means you could not find sufficient evidence either way.
 """
 
 # ---------------------------------------------------------------------------
@@ -131,12 +139,16 @@ def _build_strict_prompt(
     requirement: "DataRequirement",
     required_domains: list[dict[str, str]],
     discovered_urls: list[dict[str, str]] | None = None,
+    quality_feedback: dict[str, Any] | None = None,
 ) -> str:
     """Build a prompt that restricts search to required data-source domains only.
 
     When *discovered_urls* is provided (from Serper pre-search), the prompt
     instructs Gemini to read those specific pages first, before falling back
     to general search.
+
+    When *quality_feedback* is provided, appends collector guidance as a
+    "PREVIOUS ATTEMPT FEEDBACK" section.
     """
     market = prompt_spec.market
     semantics = prompt_spec.prediction_semantics
@@ -201,6 +213,18 @@ def _build_strict_prompt(
         if hint:
             domain_hints += f"\n{hint}\n"
 
+    # Quality feedback section
+    feedback_section = ""
+    if quality_feedback:
+        guidance = quality_feedback.get("collector_guidance", "")
+        if guidance:
+            feedback_section = (
+                f"\n--- PREVIOUS ATTEMPT FEEDBACK ---\n"
+                f"{guidance}\n"
+                f"Use this feedback to improve your search strategy.\n"
+                f"--- END FEEDBACK ---\n"
+            )
+
     return (
         f"Market question: {market.question}\n\n"
         f"Resolution rules:\n{rules_text}\n\n"
@@ -210,7 +234,8 @@ def _build_strict_prompt(
         f"Threshold: {semantics.threshold or 'N/A'}\n"
         f"{fields_hint}"
         f"{url_section}"
-        f"{domain_hints}\n"
+        f"{domain_hints}"
+        f"{feedback_section}\n"
         f"MANDATORY DATA SOURCES — search ONLY these domains: {domains_str}\n"
         f"Use these exact searches:\n"
         f"{search_instructions}\n\n"
@@ -523,7 +548,8 @@ class CollectorSitePinned(CollectorOpenSearch):
             f"=== END DATA ===\n\n"
             "Based ONLY on the data above, resolve this market.\n"
             "You MUST respond with ONLY a JSON object, no markdown fences:\n"
-            '{"outcome": "Yes or No", "reason": "Brief explanation citing specific data"}\n'
+            '{"outcome": "Yes or No or Unresolved", "reason": "Brief explanation citing specific data"}\n'
+            "Use 'Unresolved' if the data above does not contain enough information to determine the answer.\n"
         )
 
         ctx.info(
@@ -557,10 +583,17 @@ class CollectorSitePinned(CollectorOpenSearch):
         outcome = parsed.get("outcome", "")
         reason = parsed.get("reason", "")
 
-        if outcome.lower() not in ("yes", "no"):
+        if outcome.lower() not in ("yes", "no", "unresolved"):
             ctx.warning(
                 f"[SourcePinned] {extractor.source_id} LLM returned "
                 f"invalid outcome: {outcome!r}"
+            )
+            return None
+
+        if outcome.lower() == "unresolved":
+            ctx.info(
+                f"[SourcePinned] {extractor.source_id} LLM returned "
+                f"Unresolved — insufficient data from this source"
             )
             return None
 
@@ -588,6 +621,7 @@ class CollectorSitePinned(CollectorOpenSearch):
         client: Any,
         prompt_spec: PromptSpec,
         requirement: "DataRequirement",
+        quality_feedback: dict[str, Any] | None = None,
     ) -> tuple[EvidenceItem, ToolCallRecord]:
         req_id = requirement.requirement_id
         evidence_id = hashlib.sha256(
@@ -698,6 +732,7 @@ class CollectorSitePinned(CollectorOpenSearch):
             strict_prompt = _build_strict_prompt(
                 prompt_spec, requirement, required_domains,
                 discovered_urls=discovered_urls or None,
+                quality_feedback=quality_feedback,
             )
 
             best_parsed: dict[str, Any] | None = None
@@ -799,7 +834,26 @@ class CollectorSitePinned(CollectorOpenSearch):
             outcome = final_parsed.get("outcome", "")
             reason = final_parsed.get("reason", "")
             combined_text = json.dumps(final_parsed)
-            success = outcome.lower() in ("yes", "no")
+            outcome_lower = outcome.lower()
+            is_definitive = outcome_lower in ("yes", "no")
+            is_unresolved = outcome_lower == "unresolved"
+
+            # Determine resolution status
+            if is_definitive:
+                resolution_status = "RESOLVED"
+                confidence_score = 0.9 if best_sources_covered else 0.5
+                success = True
+                error_msg = None
+            elif is_unresolved:
+                resolution_status = "UNRESOLVED"
+                confidence_score = 0.0
+                success = True  # valid response, just not resolvable
+                error_msg = None
+            else:
+                resolution_status = "UNRESOLVED"
+                confidence_score = 0.0
+                success = False
+                error_msg = f"Unexpected outcome: {outcome!r}"
 
             # Deduplicate search queries
             unique_queries = list(dict.fromkeys(all_search_queries))
@@ -828,15 +882,15 @@ class CollectorSitePinned(CollectorOpenSearch):
                     content_hash=hashlib.sha256(combined_text.encode()).hexdigest(),
                 ),
                 raw_content=reason[:500] if reason else combined_text[:500],
-                parsed_value=outcome,
+                parsed_value=outcome if is_definitive else None,
                 extracted_fields={
                     "outcome": outcome,
                     "reason": reason,
                     "evidence_sources": evidence_sources,
                     "grounding_search_queries": unique_queries,
                     "grounding_source_count": len(evidence_sources),
-                    "confidence_score": 0.9 if (success and best_sources_covered) else (0.5 if success else 0.0),
-                    "resolution_status": "RESOLVED" if success else "UNRESOLVED",
+                    "confidence_score": confidence_score,
+                    "resolution_status": resolution_status,
                     "data_source_domains_required": [d["domain"] for d in required_domains],
                     "data_source_covered": best_sources_covered,
                     "attempts_made": attempts_made,
@@ -845,7 +899,7 @@ class CollectorSitePinned(CollectorOpenSearch):
                     "url_context_statuses": all_url_context_statuses,
                 },
                 success=success,
-                error=None if success else f"Unexpected outcome: {outcome!r}",
+                error=error_msg,
             ), record
 
         except Exception as e:

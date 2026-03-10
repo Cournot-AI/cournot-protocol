@@ -1,0 +1,580 @@
+[
+  {
+    "event_id": 98171228668577,
+    "title": "Will Trump say \"Thousand / Million / Billion\" 12+ times during events with UK Prime Minister on September 18?",
+    "description": "Donald Trump is scheduled to participate in a Bilateral Meeting and Press Conference with the Prime Minister of the United Kingdom Keir Starmer on Thursday, September 18, 2025. (see: https://rollcall.com/factbase/trump/calendar/)\n\nThis market will resolve to \"Yes\" if Donald Trump says the listed term during his appearance at these events. Otherwise, the market will resolve to \"No\".\n\nPluralization/possessive of the listed term will count toward the resolution of this market.\n\nInstances where the term is used in a compound word will count regardless of context (e.g. joyful is not a compound word for \"joy,\" however \"killjoy\" is a compounding of the words \"kill\" and \"joy\").\n\nIf this market requires a specified number of mentions of a person’s first or last name, a full-name mention will count as one mention (e.g., if a market is about “Joe / Biden 5+ times,” a mention of “Joe Biden” will count once).\n\nIf this event is definitively cancelled, or otherwise is not aired by September 18, 2025, 11:59 PM ET, this market will resolve to \"No\".\n\nThis market is explicitly about the named, scheduled bilateral and press conference events with the UK Prime Minister (https://rollcall.com/factbase/trump/topic/calendar/). If a bilateral or multilateral lunch is scheduled and broadcast, it will also qualify toward this market's resolution. Speeches, events, or comments that occur outside of the named scheduled events will not qualify toward this market's resolution. If the events contain a Q&A, it will count toward the resolution of this market.\n\nThe resolution source will be video of the events.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "politics",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification of Trump's speech, making it challenging for oracle strategies that rely on text-based data. The need to count specific terms adds complexity and ambiguity to the resolution process.",
+    "tests_aspects": [
+      "visual_verification",
+      "judgement",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 113017701484511,
+    "title": "Will Kanye have no token before April",
+    "description": "This market will resolve according to the ticker of the first token Kanye West is confirmed to have launched between February 22, and March 31, 2025, 11:59 PM ET.\n\nOnly tokens which are confirmed to have been launched by Kanye West, either through posts from official social media channels, or otherwise confirmed by public statements will qualify. \n\nThe token must be actively transferrable and/or tradable, announcements alone will not qualify. \n\nIf Kanye does not launch a token by March 31, 2025, 11:59 PM ET this market will resolve to “No token before April”.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "crypto",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires nuanced verification of a specific cryptocurrency launch, which involves monitoring multiple sources, including social media and public statements. The need for confirmation of active transferability adds complexity, making it a valuable test for oracle strategies.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "conditional_logic"
+    ]
+  },
+  {
+    "event_id": 277331414299232,
+    "title": "Will Russia capture Huliaipole by January 31?",
+    "description": "This market will resolve to “Yes” if, according to the ISW map, Russia captures the intersection between T-04-01 and Heroiv Ukrainy Vulytsia located in Huliaipole by the listed date, 11:59 PM ET.\n\nThe intersection station will be considered captured if any part of the intersection is shaded red on the ISW map (https://storymaps.arcgis.com/stories/36a7f6a6f5a9448496de641cf64bd375) by the resolution date. If the area is not shaded red by the specified date, the market will resolve to “No”.\n\nFor any change on the ISW map to qualify for this market’s resolution, the relevant shading indicating Russian control must persist through the next full ISW daily update cycle. If ISW skips a day, shading must persist until the next finalized ISW update is published, regardless of the date. Any continuous shading which reflects either “Assessed Russian Control”, “Assessed Russian Advance In Ukraine”, or “Assessed Russian Gains in the Past 24 Hours” will qualify. “Assessed Russian Infiltration Areas in Ukraine” will not qualify.\n\nIf Russia comes into control of this territory as a result of a negotiated settlement, this will qualify for a 'Yes' resolution, regardless of whether it is shaded red in the ISW map. An announcement of a negotiated settlement that gives Russia de jure control will not qualify. Actual control must be established.\n\nOnce Russia captures the intersection, any subsequent loss of control will not be considered towards the resolution of this market.\n\nIntersection Location: https://polymarket-upload.s3.us-east-2.amazonaws.com/1-25de2807b3.png\n\nIntersection Location in Huliaipole: https://polymarket-upload.s3.us-east-2.amazonaws.com/2-4fb07c1a3f.png\n\nHuliaipole Location: https://polymarket-upload.s3.us-east-2.amazonaws.com/3-fb49118886.png\n\nLocation on Google Maps: https://maps.app.goo.gl/tQZEoimrxmfJb2MK6\n\nThe primary resolution source for this market will be the ISW Ukraine map. If the ISW map is rendered unavailable, information from DeepStateMap (https://deepstatemap.live/) may be used. If information from both the ISW and DeepStateMap are rendered permanently unavailable, a consensus of credible reporting may be used.\n\nNote: Any temporary glitches or errors in the map will not be considered.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "geopolitics",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification from a specific map source, which adds complexity to the resolution process. The need to interpret the shading on the ISW map introduces ambiguity and tests the oracle's ability to source and verify non-textual evidence.",
+    "tests_aspects": [
+      "visual_verification",
+      "data_sourcing",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 207707967723346,
+    "title": "Will May 2024 show an increase between 1.10°C-1.16°C",
+    "description": "This market will resolve to \"Yes\" if the data for the Global Land-Ocean Temperature Index for May 2024 shows an increase of between 1.10°C (inclusive) and 1.16°C (inclusive) when it is released. Otherwise, this market will resolve to \"No\".\n\nAn anomaly of between 1.10°C (inclusive) and 1.16°C (inclusive) for May 2024 is necessary and sufficient to resolve this market to \"Yes\" immediately once the data becomes available regardless of whether the figure for May 2024 is later revised.\n\nThe primary resolution source for this market will be the figure found in the table titled \"GLOBAL Land-Ocean Temperature Index in 0.01 degrees Celsius\" under the column \"May\" in the row \"2024\" (https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.txt). If NASA's \"Global Temperature Index\" is rendered permanently unavailable, other information from NASA may be used. If no information for May 2024 is provided by NASA by July 1, 2024, 11:59 PM ET, this market will resolve \"No\".",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "climate",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires precise temperature data that may not be readily available from standard news sources, and it involves specific numerical thresholds that necessitate careful verification. The resolution relies on future data that could be subject to revision, adding complexity to the judgment process.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "numerical_comparison"
+    ]
+  },
+  {
+    "event_id": 117501390788988,
+    "title": "Will Karoline Leavitt say \"Million\" or \"Billion\" or \"Trillion\" 10+ times during next White House press briefing?",
+    "description": "This market will resolve to \"Yes\" if Karoline Leavitt says the listed term during the next White House press briefing she participates in. Otherwise, the market will resolve to \"No\".\n\nAny usage of the term regardless of context will count toward the resolution of this market.\n\nPluralization/possessive of the term will count toward the resolution of this market, however other forms will NOT count.\n\nInstances where the term is used in a compound word will count regardless of context (e.g. joyful is not a compound word for \"joy,\" however \"killjoy\" is a compounding of the words \"kill\" and \"joy\").\n\nIf no such press briefing happens by December 31, 2025, 11:59 PM ET, this market will resolve to \"No\". If Leavitt ceases to be White House press secretary for any length of time by December 31, 2025, 11:59 PM ET, this market will resolve to \"No\".\n\nThis market refers to the regular White House press briefings, which are typically scheduled on weekdays between 12 PM ET and 3 PM ET as per the official schedule.\n\nThe resolution source will be video of the press briefing.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "politics",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires careful listening and counting of specific terms during a live press briefing, making it challenging to resolve through standard text-based sources. The need for visual verification of the press briefing adds complexity to the resolution process.",
+    "tests_aspects": [
+      "visual_verification",
+      "judgement",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 55091239371859,
+    "title": "Will December 2025 be the 4th or lower hottest on record?",
+    "description": "This market will resolve based on the data for the Global Land-Ocean Temperature Index for December 2025 versus the data points available for all other Decembers on record.\n\nNote: If December 2025 is tied for first, second, or third hottest with another year, it will qualify for the bracket it ties with.\n\nThe primary resolution source for this market will be the figures found in the table titled \"GLOBAL Land-Ocean Temperature Index in 0.01 degrees Celsius\" under the column \"Dec\" (https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.txt). If NASA's \"Global Temperature Index\" is rendered permanently unavailable, other information from NASA may be used.\nIf no information for December 2025 is provided by NASA by January 31, 2026, 11:59 PM ET, a consensus of credible sources will be used to resolve this market.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "climate",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires complex resolution criteria based on specific temperature data, which involves multi-source cross-checking and numerical comparison against historical records. The reliance on precise temperature measurements and the potential for ties adds layers of ambiguity and judgement.",
+    "tests_aspects": [
+      "data_sourcing",
+      "numerical_comparison",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 101490477667923,
+    "title": "Will Russia capture Novopavlivka by December 31?",
+    "description": "This market will resolve to “Yes” if, according to the ISW map, Russia captures the intersection between T-04-28 and Dniprovskyi provulok located in Novopavlivka by December 31, 2025, at 11:59 PM ET.\n\nThe intersection station will be considered captured if any part of the intersection is shaded red on the ISW map (https://storymaps.arcgis.com/stories/36a7f6a6f5a9448496de641cf64bd375) by the resolution date. If the area is not shaded red by December 31, 2025, 11:59 PM ET, the market will resolve to “No”.\n\nIf Russia comes into control of this territory as a result of a negotiated settlement, this will qualify for a 'Yes' resolution, regardless of whether it is shaded red in the ISW map. An announcement of a negotiated settlement which gives Russia de jure control will not qualify. Actual control must be established.\n\nOnce Russia captures the intersection, any subsequent loss of control will not be considered towards the resolution of this market.\n\nIntersection Location: https://polymarket-upload.s3.us-east-2.amazonaws.com/Novopavlivka+intersection.jpeg\n\nNovopavlivka location: https://polymarket-upload.s3.us-east-2.amazonaws.com/Novopavlivka.jpeg\n\nLocation on Google maps: https://maps.app.goo.gl/JvQ3C5D59F42QJse6\n\nThe primary resolution source for this market will be the ISW Ukraine map. If the ISW map is rendered unavailable, information from DeepStateMap (https://deepstatemap.live/) may be used. If information from both the ISW and DeepStateMap are rendered permanently unavailable, a consensus of credible reporting may be used.\n\nNote: Any temporary glitches or errors in the map will not be considered.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "geopolitics",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires complex resolution criteria based on a specific visual map, which tests the oracle's ability to source and interpret non-textual evidence. The ambiguity in determining the exact capture of the intersection adds to the challenge.",
+    "tests_aspects": [
+      "visual_verification",
+      "judgement",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 200616512682992,
+    "title": "Will Fartcoin reach $1.50 before June?",
+    "description": "This market will immediately resolve to \"Yes\" if any Dexscreener 1 minute candle for Fartcoin (Fartcoin/SOL) between May 7, 2025, 15:00 and May 31, 2025, 23:59 in the ET timezone has a final \"H\" price of $1.5000 or higher. Otherwise, this market will resolve to \"No.\"\n\nThe resolution source for this market is Dexscreener, specifically the Fartcoin/SOL \"H\" prices available at https://dexscreener.com/solana/bzc9nzfmqkxr6fz1dbph7bdf9broyef6pnzesp7v5iiw, with the chart settings on \"1m\" for one-minute candles selected on the top bar.\n\nPlease note that the outcome of this market depends solely on the price data from the Dexscreener Fartcoin/SOL trading pair. Prices from other exchanges, different trading pairs, or spot markets will not be considered for the resolution of this market.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "crypto",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires monitoring a specific cryptocurrency's price over a defined period, necessitating real-time data sourcing and verification from a niche platform. The complexity of tracking minute-by-minute price changes adds a layer of challenge, especially given the volatility of cryptocurrencies.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 261023199877050,
+    "title": "Will Russia capture Ivanopillya by November 30?",
+    "description": "This market will resolve to “Yes” if, according to the ISW map, Russia captures the intersection Tsentralna Volytsia x Sorokina Volytsia in Ivanopillya, Donetsk Oblast province, by November 30, 2025, at 11:59 PM ET.\n\nThe intersection will be considered captured if any part of the intersection is shaded red on the ISW map (https://storymaps.arcgis.com/stories/36a7f6a6f5a9448496de641cf64bd375) by the resolution date. If the area is not shaded red by November 30, 2025, 11:59 PM ET, the market will resolve to “No”.\n\nIf Russia comes into control of this territory as a result of a negotiated settlement, this will qualify for a 'Yes' resolution, regardless of if it is shaded red in the ISW map. An announcement of a negotiated settlement which gives Russia de jure control will not qualify. Actual control must be established.\n\nOnce Russia captures the intersection, any subsequent loss of control will not be considered towards the resolution of this market.\n\nIntersection Location: https://polymarket-upload.s3.us-east-2.amazonaws.com/Ivanopillya+intersection+zoom.png\n\nIntersection Location in Ivanopillya: https://polymarket-upload.s3.us-east-2.amazonaws.com/Ivanopillya+intersection.png\n\nIvanopillya Location: https://polymarket-upload.s3.us-east-2.amazonaws.com/Ivanopillya.png\n\nLocation on Google Maps: https://maps.app.goo.gl/YVWkSLgVvzz2PCZ16 \n\nThe primary resolution source for this market will be the ISW Ukraine map. If the ISW map is rendered unavailable, information from DeepStateMap (https://deepstatemap.live/) may be used. If information from both the ISW and DeepStateMap are rendered permanently unavailable, a consensus of credible reporting may be used.\n\nNote: Any temporary glitches or errors in the map which will not be considered.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "geopolitics",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires complex resolution criteria based on a specific map and visual evidence, making it challenging for oracle strategies that rely on text-based data. The need for precise geographical verification adds to its complexity.",
+    "tests_aspects": [
+      "visual_verification",
+      "judgement",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 100280793762136,
+    "title": "Will Kimmel say \"Apologize\" or \"Sorry\" 5+ times during return show on September 23?",
+    "description": "Jimmy Kimmel is scheduled to host the September 23 broadcast of Jimmy Kimmel Live! for the first time since his suspension nearly a week ago: https://www.nbcnews.com/business/media/jimmy-kimmel-abc-return-tuesday-rcna232335\n\nThis market will resolve to \"Yes\" if Jimmy Kimmel says the listed term at any point during this episode. Otherwise, the market will resolve to \"No\".\n\nIf clips of old episodes or prerecorded videos are aired where Kimmel is speaking, those clips will count toward this market's resolution.\n\nCommercials which are not part of the show itself will not qualify toward this market's resolution.\n\nAny usage of the term regardless of context will count toward the resolution of this market.\n\nPluralization/possessive of the term will count toward the resolution of this market, however other forms will NOT count.\n\nInstances where the term is used in a compound word will count regardless of context (e.g. joyful is not a compound word for \"joy,\" however \"killjoy\" is a compounding of the words \"kill\" and \"joy\").\n\nIf this market requires a specified number of mentions of a person’s first or last name, a full-name mention will count as one mention (e.g., if a market is about “Joe / Biden 5+ times,” a mention of “Joe Biden” will count once).\n\nIf this appearance is definitively cancelled by Jimmy Kimmel or ABC, or otherwise is not released by September 24, 2025, 11:59 PM ET, this market will resolve to \"No\".\n\nThe resolution source will be audio/video of the appearance.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "entertainment",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification of Kimmel's live performance and the counting of specific words, making it complex and challenging for oracle strategies that rely on text-based data. The need to differentiate between live speech and pre-recorded clips adds an additional layer of ambiguity.",
+    "tests_aspects": [
+      "visual_verification",
+      "ambiguity_handling",
+      "judgement"
+    ]
+  },
+  {
+    "event_id": 29976825469403,
+    "title": "Will KJP say \"Ukraine\" during press briefing?",
+    "description": "Karine Jean-Pierre is currently scheduled to give press briefing on December 10 at 2:00 PM ET. This market pertains to the opening statement as well as any following Q&A session. You can watch this briefing here: https://www.youtube.com/watch?v=2-suJBz351c\n\nThis market will resolve to \"Yes\" if KJP says \"Ukraine\" during the White House press briefing. Otherwise, this market will resolve to \"No\". \n\nAny usage of the word regardless of context will count toward the resolution of this market. \n\nPluralization/possessive of the word will count toward the resolution of this market, however other forms will NOT count.\n\nCompound words will count as long as \"Ukraine\" is part of the compound word and references the meaning which refers to the country in Eastern Europe.\n\nIf no such press briefing happens by December 17, 2024, 11:59 PM ET, this market will resolve to \"No\".\n\nThe resolution source will be video and transcripts of the press briefing.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "politics",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification of a live press briefing, making it challenging for oracle strategies that rely on text-based data. The need to confirm the specific word used in a potentially ambiguous context adds complexity to the resolution.",
+    "tests_aspects": [
+      "visual_verification",
+      "ambiguity_handling",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 147351661703044,
+    "title": "XRP all time high before 2026?",
+    "description": "This market will resolve to \"Yes\" if any Binance 1 minute candle for XRPUSDT between 12 Mar '25 15:00 and 31 Dec '25 23:59 in the ET timezone has a final “High” price that is higher than any previous Binance 1 minute candle's \"High\" price on any prior date. Otherwise, this market will resolve to \"No\".\n\nThe resolution source for this market is Binance, specifically the XRPUSDT \"High\" prices currently available at https://www.binance.com/en/trade/XRP_USDT with “1m” and “Candles” selected on the top bar.\n\nPlease note that this market is about the price according to Binance XRPUSDT, not according to other sources or spot markets.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "crypto",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires complex resolution criteria based on specific price data from a cryptocurrency exchange, which is not easily accessible through standard news APIs. The need for precise time-sensitive data and the potential for ambiguity in price movements make it a challenging benchmark.",
+    "tests_aspects": [
+      "data_sourcing",
+      "time_sensitivity",
+      "verification"
+    ]
+  },
+  {
+    "event_id": 234242767529115,
+    "title": "Will Luigi Mangione smile during next court appearance?",
+    "description": "This market will resolve to \"Yes\" if Luigi Mangione smiles during his next court appearance after the creation of this market. Otherwise, this market will resolve to \"No\".\n\nOnly smiles captured on photo or video will count toward the resolution of this market, and only smiles captured in the courtroom will qualify. Smiles captured during transportation to or from his next court appearance will not qualify. If Luigi Mangione does not appear in court by March 31, 2026, 11:59PM ET, this market will resolve to \"No\".\n\nThe resolution source for this market will be photos and videos of Luigi Mangione's next appearance in court.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "legal",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification of a specific action (smiling) in a defined context (courtroom), making it complex and challenging for oracle strategies that rely on text-based data. The need for precise conditions and the potential ambiguity in what constitutes a smile further enhance its difficulty.",
+    "tests_aspects": [
+      "visual_verification",
+      "conditional_logic",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 187478623420925,
+    "title": "Will \"Michael\" or \"Burry\" be said on the next episode of the All-In Podcast?",
+    "description": "The All-In Podcast is scheduled to release episodes every Friday. (https://www.youtube.com/@allin)\n\nThis market will resolve to \"Yes\" if the listed term is mentioned by anyone during the next released episode of the All-In Podcast. Otherwise, the market will resolve to \"No\".\n\nIf clips of old episodes or prerecorded clips are aired where people are speaking, those clips will count toward this market's resolution.\n\nAI-generated audio or video will count toward this market's resolution.\n\nAny usage of the term, regardless of context, will count toward the resolution of this market.\n\nPluralization/possessive of the term will count toward the resolution of this market; however, other forms will NOT count.\n\nInstances where the term is used in a compound word will count regardless of context (e.g. joyful is not a compound word for \"joy,\" however \"killjoy\" is a compounding of the words \"kill\" and \"joy\").\n\nIf this market requires a specified number of mentions of a person’s first or last name, a full-name mention will count as one mention (e.g., if a market is about “Joe / Biden 5+ times,” a mention of “Joe Biden” will count once).\n\nIf no such episode of the All-In Podcast is aired by February 28, 2026, 11:59 PM ET, this market will resolve to \"No\".\n\nThe resolution source will be audio of the event.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "entertainment",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification and potentially complex judgement regarding the context in which the terms are mentioned, making it more challenging than typical prediction markets. The reliance on audio and video content adds a layer of complexity that tests oracle capabilities.",
+    "tests_aspects": [
+      "visual_verification",
+      "judgement",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 246466771031522,
+    "title": "Will Taylor Swift say \"Eras\" or \"Tour\" 10+ times on The Late Show on December 10?",
+    "description": "Taylor Swift is scheduled to appear on the December 10 broadcast of The Late Show With Stephen Colbert: https://www.usatoday.com/story/entertainment/music/2025/12/08/taylor-swift-colbert-late-show-how-to-watch-eras-tour-documentary/87671841007/\n\nThis market will resolve to \"Yes\" if Taylor Swift says the listed term at any point during this episode. Otherwise, the market will resolve to \"No\".\n\nIf clips of old episodes or prerecorded videos are aired where Taylor Swift is speaking, those clips will count toward this market's resolution.\n\nCommercials which are not part of the show itself will not qualify toward this market's resolution.\n\nAI-generated audio or video will not count towards this market's resolution.\n\nAny usage of the term regardless of context will count toward the resolution of this market.\n\nPluralization/possessive of the term will count toward the resolution of this market, however other forms will NOT count.\n\nInstances where the term is used in a compound word will count regardless of context (e.g. joyful is not a compound word for \"joy,\" however \"killjoy\" is a compounding of the words \"kill\" and \"joy\").\n\nIf this market requires a specified number of mentions of a person’s first or last name, a full-name mention will count as one mention (e.g., if a market is about “Joe / Biden 5+ times,” a mention of “Joe Biden” will count once).\n\nIf this appearance is definitively cancelled by Taylor Swift or CBS, or otherwise is not released by December 11, 2025, 11:59 PM ET, this market will resolve to \"No\".\n\nThe resolution source will be audio/video of the appearance.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "entertainment",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification of Taylor Swift's speech during a live broadcast, making it challenging for oracle strategies that rely on text-based data. The need to determine the frequency of specific words adds complexity and ambiguity to the resolution process.",
+    "tests_aspects": [
+      "visual_verification",
+      "ambiguity_handling",
+      "judgement"
+    ]
+  },
+  {
+    "event_id": 183951019926056,
+    "title": "Will Glen Powell say \"Texas\" during Saturday Night Live on November 15?",
+    "description": "Glen Powell is scheduled to appear on the November 15 broadcast of Saturday Night Live: https://www.nbc.com/nbc-insider/snl-hosts-musical-guests-november-1-8-15-2025\n\nThis market will resolve to \"Yes\" if Glen Powell says the listed term at any point during the initial broadcast of this episode. Otherwise, the market will resolve to \"No\".\n\nIf clips of old episodes or prerecorded videos are aired where Glen Powell is speaking, those clips will count toward this market's resolution.\n\nCommercials which are not part of the show itself will not qualify toward this market's resolution.\n\nAny usage of the term regardless of context will count toward the resolution of this market.\n\nPluralization/possessive of the term will count toward the resolution of this market, however other forms will NOT count.\n\nInstances where the term is used in a compound word will count regardless of context (e.g. joyful is not a compound word for \"joy,\" however \"killjoy\" is a compounding of the words \"kill\" and \"joy\").\n\nIf this market requires a specified number of mentions of a person’s first or last name, a full-name mention will count as one mention (e.g., if a market is about “Joe / Biden 5+ times,” a mention of “Joe Biden” will count once).\n\nCensored instances of a given term that cannot be heard in full will not qualify toward this market's resolution.\n\nIf this appearance is definitively cancelled by Glen Powell or NBC, or otherwise is not released by November 16, 2025, 11:59 PM ET, this market will resolve to \"No\".\n\nThe resolution source will be audio/video of the appearance.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "entertainment",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification of a specific utterance during a live broadcast, making it challenging for oracle strategies that rely on text-based data. The need to confirm whether a specific word is spoken adds complexity and ambiguity to the resolution process.",
+    "tests_aspects": [
+      "visual_verification",
+      "ambiguity_handling",
+      "judgement"
+    ]
+  },
+  {
+    "event_id": 26352915578343,
+    "title": "Will there be an on-stage brawl during the official weigh-in?",
+    "description": "This market will resolve to “Yes” if Jake Paul and Gervonta Davis engage in unauthorized physical contact (such as pushing, striking, or grappling) during or immediately after the official weigh-in event. Otherwise, it will resolve to “No.”\n\nMere face-offs, pointing, verbal exchanges, or security intervention without physical contact will not qualify.\n\nIf the bout does not occur for any reason or is postponed beyond December 31, 2025, the market will resolve to 50-50.\n\nThe primary resolution source for this market will be the official broadcast or livestream of the weigh-in event. A consensus of credible reporting may also be used.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "sports",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification to determine if unauthorized physical contact occurs during the weigh-in, making it challenging for oracle strategies that rely on text-based data. The specific criteria for resolution also introduce ambiguity and subjective interpretation.",
+    "tests_aspects": [
+      "visual_verification",
+      "ambiguity_handling",
+      "subjective_interpretation"
+    ]
+  },
+  {
+    "event_id": 120873955452217,
+    "title": "Will either fighter be knocked down in Round 1?",
+    "description": "This market will resolve to “Yes” if either Jake Paul or Gervonta Davis is knocked down at any point during Round 1 of their bout. Otherwise, it will resolve to “No.”\n\nFor this market, a fighter will be considered “knocked down” if they are struck by a legal blow such that (1) any part of their body other than the feet touches the canvas, or (2) they are held up by or hanging on the ropes (i.e., would have fallen without the ropes), in either case resulting in the referee delivering a mandatory count or stopping the fight due to a knockout.\n\nAccidental slips, trips, or falls will not count as knockdowns.\n\nIf the bout does not occur for any reason or is postponed beyond December 31, 2025, the market will resolve to 50-50.\n\nThe primary resolution source for this market will be the official broadcast of the bout on Netflix. A consensus of credible reporting may also be used.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "sports",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires visual verification to determine if a knockdown occurs, making it complex due to the need for real-time observation and interpretation of the fight's dynamics. The resolution relies on specific criteria that may not be straightforward, testing the oracle's ability to handle ambiguity and conditional logic.",
+    "tests_aspects": [
+      "visual_verification",
+      "ambiguity_handling",
+      "conditional_logic"
+    ]
+  },
+  {
+    "event_id": 58927118180803,
+    "title": "Will NYC record precipitation on exactly 11 days in December?",
+    "description": "This market will resolve according to the number of days on which precipitation is recorded as greater than 0 inches in Central Park, New York City between December 1 and December 31, 2025, 11:59PM ET according to the National Oceanic and Atmospheric Administration (NOAA).\n\nThe resolution source for this market will be NOAA, specifically the figure for December 2025 when the \"Monthly summarized data\" for \"NY-Central Park Area\" is selected with the variable set to \"Precipitation\" and the summary set to \"Number of days\" with the threshold at \">0\" at the https://www.weather.gov/wrh/climate?wfo=okx link once that figure is finalized for the whole month of December 2025.\n \nThe resolution source for this market measures precipitation to 2 decimal places (e.g., 1.54), thus, this is the level of precision that will be used when resolving this market. Any revisions to precipitation recorded after data is finalized for this market's timeframe will not be considered for this market's resolution.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "climate",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires non-trivial data sourcing from NOAA and involves visual verification of precipitation data, making it more complex than standard prediction markets. The specificity of the date and location adds to the challenge of resolution.",
+    "tests_aspects": [
+      "data_sourcing",
+      "visual_verification",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 139943368832292,
+    "title": "Will Remilio flip MAYC in April?",
+    "description": "This market will resolve to \"Yes\" if the Redacted Remilio Babies (TEST) collection has a higher floor price than the Mutant Ape Yacht Club (MAYC) collection for at least one continuous hour between April 7, 2024, 11:59 PM ET and April 30, 2024, 11:59 PM ET. \n\nThe primary resolution source for this market will be Blur's chart for each NFT, specifically the red line for 30-day sales, for the dates within this market's range (Redacted Remilio Babies: https://blur.io/collection/remilio-babies, MAYC: https://blur.io/collection/mutant-ape-yacht-club). If Blur becomes unavailable or ceases to report figures, another credible source may be used.\n\nNote: If the hour-long period starts at e.g., April 30, 2024, 11:30 PM ET, it will still count for this market's resolution.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "crypto",
+    "benchmark_score": 85,
+    "benchmark_reasoning": "This event requires complex resolution criteria involving continuous monitoring of NFT floor prices over a specified time period, which tests data sourcing and verification capabilities. The reliance on a specific platform for resolution adds a layer of niche domain complexity.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 177717133336779,
+    "title": "Lighter Airdrop on December 30?",
+    "description": "This market will resolve according to the next date Lighter performs an airdrop on. \n\nIf Lighter launches a memecoin and performs an airdrop of that token within this market's timeframe, it will qualify for a \"Yes\" resolution.\n\nFor the purposes of this market \"locked\" tokens or non-swappable tokens will not suffice to resolve this market to \"Yes\". Airdrops of NFTs will not qualify.\n\nThe primary resolution source for this market is on-chain information and official information from Lighter, however a consensus of credible reporting will also be used.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "crypto",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires monitoring on-chain data and official announcements, which adds complexity to the resolution process. It tests the oracle's ability to source and verify information from niche domains in the cryptocurrency space.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "niche_domain"
+    ]
+  },
+  {
+    "event_id": 195961144134463,
+    "title": "Will Alexandria Ocasio-Cortez be named in newly released Epstein files?",
+    "description": "This market will resolve to \"Yes\" if the Trump Administration (including any federal court) publicly releases previously unreleased files pertaining to the illegal activities of Jeffrey Epstein which contain any mention of the listed individual between November 18 and December 31, 2025, 11:59 PM ET. Otherwise, this market will resolve to \"No\".\n\nOnly previously unreleased files which contain novel material not previously available to the public will qualify. Documents that are merely re-released, have had redactions removed, repackaged, or newly publicized versions of already available information do not qualify.\n\nAny mention of the listed individual in connection with Jeffrey Epstein will qualify, regardless of if connected to nefarious or illegal activities.\n\nPreviously unreleased files is inclusive of any written, audio, photo or video documentation (e.g., qualifying photos which depict the listed individual will count).\n\nThe primary resolution source for this market will be a consensus of credible reporting.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "legal",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event involves the release of legal documents and requires verification of specific content within those documents, which may not be straightforward to source. It tests the oracle's ability to handle legal nuances and the ambiguity of what constitutes 'novel material'.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 7842044102910,
+    "title": "Will OpenAI have the best AI model for coding at the end of 2025?",
+    "description": "This market will resolve to the company which owns the model that has the top LiveBench “coding average” score, as based off the LiveBench AI model leaderboard (https://livebench.ai/#/), on December 31, 2025, 12:00 PM ET. \n\nIf two models are tied for the top LiveBench coding average score at this market's check time, resolution will be based on whichever company's name, as it is described in this market group, comes first in alphabetical order.\n\nThe primary source of resolution for this market will be LiveBench’s AI leaderboard, specifically the “coding average” category, found at livebench.ai. If this resolution source is unavailable at check time, this market will remain open until the leaderboard comes back online and resolve based on the first check after it becomes available. If it becomes permanently unavailable, this market will resolve based on another resolution source.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "tech",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires monitoring a specific AI model leaderboard and involves potential ambiguity in case of ties, which tests judgement and verification capabilities. The reliance on a niche domain and the need for multi-source cross-checking to confirm the leaderboard results adds complexity.",
+    "tests_aspects": [
+      "data_sourcing",
+      "judgement",
+      "verification"
+    ]
+  },
+  {
+    "event_id": 162002133056138,
+    "title": "2025 September second hottest on record?",
+    "description": "This market will resolve based on the data for the Global Land-Ocean Temperature Index for September 2025 versus the data points available for all other Septembers on record.\n\nNote: If 2025 September is tied for first, second, or third hottest with another year, it will qualify for the bracket it ties with.\n\nThe primary resolution source for this market will be the figures found in the table titled \"GLOBAL Land-Ocean Temperature Index in 0.01 degrees Celsius\" under the column \"Sep\" (https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.txt). If NASA's \"Global Temperature Index\" is rendered permanently unavailable, other information from NASA may be used. If no information for September 2025 is provided by NASA by November 1, 2025, 11:59 PM ET, a consensus of credible sources will be used to resolve this market.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "climate",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires moderately complex resolution as it involves comparing temperature data across multiple years, which tests the oracle's ability to source and verify numerical data from a specific dataset. It also involves some judgement in determining ties, making it more challenging than straightforward events.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "numerical_comparison"
+    ]
+  },
+  {
+    "event_id": 208647089079672,
+    "title": "Will the Australian hero donation campaign raise between $2.25 million and $2.5 million by December 16?",
+    "description": "On December 14, a donation campaign was started for an Australian man who tackled one of the Bondi Beach attackers (see: https://x.com/BillAckman/status/2000333304864874509)\n\nThis market will resolve according to the amount of money the Bondi Beach Hero's GoFundMe campaign (https://www.gofundme.com/f/zbcjn-support-the-hero-who-disarmed-a-bondi-attacker) raises by December 16, 2025, 11:59 PM ET. \n\nIf the reported value falls exactly between two brackets, this market will resolve to the higher range bracket.\n\nThe resolution source will be information from the relevant GoFundMe page.\n\nIf the campaign ends or otherwise becomes permanently unavailable before resolution time, this market will resolve according to the last number published prior.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "other",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires tracking a specific fundraising campaign, which involves monitoring multiple sources and potentially verifying the final amount raised through a GoFundMe page. The resolution criteria are clear but involve some ambiguity regarding the exact amount raised, making it moderately complex.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 117260473867706,
+    "title": "Will Other be the #1 searched TV show on Google this year?",
+    "description": "This market will resolve according to the television show ranked #1 in Google’s official Year in Search list for 2025, published on Google’s Year in Search hub.\n\nThe authoritative location is trends.withgoogle.com/year-in-search (navigate: Global → Entertainment → TV Shows), where the 2025 page will appear once released (as the 2024 page currently shows the Global “TV Shows” ranking).\n\nIf a search term clearly refers to the term listed by Google (for example, through season specification), it will count toward that listed term.\n\nThis market may resolve as soon as the official 2025 data is released for the specified timeframe. If none of the listed options is ranked #1 in the respective list or if Google does not release the 2025 Year in Search by March 31, 2026, 11:59 PM ET, this market will resolve to “Other.”",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "entertainment",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires tracking and verifying search trends over a year, which involves some complexity and the need for judgment regarding the ranking criteria. However, it primarily relies on a single source for resolution, which slightly limits its challenge.",
+    "tests_aspects": [
+      "data_sourcing",
+      "judgement",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 38026769046880,
+    "title": "Will xAI have the #3 AI model at the end of December 2025?",
+    "description": "This market will resolve according to the company that owns the model with the third-highest arena score based on the Chatbot Arena LLM Leaderboard when the table under the \"Leaderboard\" tab is checked on December 31, 2025, 12:00 PM ET.\n\nResults from the \"Arena Score\" section on the Leaderboard tab of https://lmarena.ai/leaderboard/text set to default (style control on) will be used to resolve this market.\n\nIf two models are tied for the third-highest arena score at this market's check time, resolution will be based on whichever company's name, as it is described in this market group, comes first in alphabetical order (e.g., if both were tied, \"Google\" would resolve to \"Yes\", and \"xAI\" would resolve to \"No\")\n\nThe resolution source for this market is the Chatbot Arena LLM Leaderboard found at https://lmarena.ai/. If this resolution source is unavailable at check time, this market will remain open until the leaderboard comes back online and resolves based on the first check after it becomes available. If it becomes permanently unavailable, this market will resolve based on another resolution source.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "tech",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires monitoring a specific leaderboard and involves potential ambiguity in case of ties, making it moderately complex. It tests the oracle's ability to source data from a niche domain and handle conditional logic based on the leaderboard's results.",
+    "tests_aspects": [
+      "data_sourcing",
+      "judgement",
+      "conditional_logic"
+    ]
+  },
+  {
+    "event_id": 162794971055601,
+    "title": "Karen Read acquitted on all charges?",
+    "description": "This market will resolve to \"Yes\" if Karen Read is not found guilty of any of the charges for which she is presently on trial in Commonwealth of Massachusetts v. Karen Read by 11:59 PM ET on December 31, 2025. Otherwise, this market will resolve to \"No\".\n\nThe charges in this case are:\n-Second-degree murder\n-Vehicular manslaughter while under the influence\n-Leaving the scene of a collision causing death\n\nThis market will resolve based on the first verdict rendered by the court regarding Read’s ongoing trial.\n\nIf the trial ends without a verdict finding Read guilty on any of the above charges (e.g. full acquittal, mistrial on all charges, hung jury on all charges, or dismissal of all charges), this market will resolve to \"Yes\".\n\nIf Read is found guilty of even one charge, this market will resolve to \"No\".\n\nThe market will resolve according to the initial judgment rendered in this case. Any appeals will have no bearing on the resolution of this market.\n\nThe primary resolution source will be official information from the Massachusetts court system; however, a consensus of credible reporting may also be used.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "legal",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event involves a complex legal case with multiple serious charges, requiring careful tracking of court proceedings and verdicts, which tests the oracle's ability to source and verify legal outcomes. The resolution is not straightforward and involves judgment on the legal process over an extended period.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "judgement"
+    ]
+  },
+  {
+    "event_id": 48061183418475,
+    "title": "Will OpenTable’s “Seated diners from online, phone, and walk-in reservations” data point for the United States exceed its 2019 baseline by 7% or more by November 1, 2021?",
+    "description": "In response to trader inquiry: This market will resolve according to the resolution source’s website data table, where final daily percentages rounded to the nearest whole number are recorded, and not the live graph. If the website data table is unavailable, rounded numbers from the downloadable csv will be used. Each daily check will check numbers from the day of the market’s inception, August 19, up to the day prior.\n\nThis is a market on whether OpenTable’s State of the Industry site will display a day whose  “Seated diners from online, phone, and walk-in reservations” exceed its 2019 baseline by 7% or more on or before November 1, 2021. This market will resolve to “Yes” if, on or before November 1, 2021, 3 PM ET, https://www.opentable.com/state-of-industry lists an increase of 7% or more for the United States under the section “Seated diners from online, phone, and walk-in reservations.” This market will resolve to “No” if there is not a single day between the beginning of the market and November 1, 2021, inclusive, with an increase of at least 7% compared to its 2019 baseline. The resolution source will be checked daily at 3 P.M. ET each day following the opening of this market and will resolve if an increase of 7% or more is displayed for the United States. The resolution source will be checked for the last time at 3 P.M. ET on November 2, 2021, or once per day until November 9, 2021 if data for November 1 is not immediately available. If no data is available for November 1, 2021 at 3 P.M. ET on November 9, 2021 and no day before November 1 has an increase of 7% or more, this market will resolve to “No.” In the event of ambiguity in terms of the market outcome, the market will be resolved at the sole discretion of the Markets Integrity Committee (MIC).",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "tech",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires moderately complex resolution as it involves tracking specific data points over time and checking multiple sources for accuracy, which tests the oracle's data sourcing and verification capabilities.",
+    "tests_aspects": [
+      "data_sourcing",
+      "verification",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 126946363965282,
+    "title": "Will anyone say \"Banking system\" 6+ times during the FED board meeting on October 24?",
+    "description": "A Federal Reserve Board meeting is scheduled for October 24, 2025, 2:00 PM ET. (https://www.federalreserve.gov/aboutthefed/boardmeetings/20251024open.htm)\n\nThis market will resolve to \"Yes\" if the listed term is mentioned by anyone during this event. Otherwise, the market will resolve to \"No\".\n\nAny usage of the term, regardless of context, will count toward the resolution of this market.\n\nPluralization/possessive of the term will count toward the resolution of this market; however, other forms will NOT count.\n\nInstances where the term is used in a compound word will count regardless of context (e.g. joyful is not a compound word for \"joy,\" however \"killjoy\" is a compounding of the words \"kill\" and \"joy\").\n\nIf this market requires a specified number of mentions of a person’s first or last name, a full-name mention will count as one mention (e.g., if a market is about “Joe / Biden 5+ times,” a mention of “Joe Biden” will count once).\n\nA Q&A event will count toward the resolution of this market.\n\nIf this event is definitely cancelled, or otherwise is not aired by October 24, 2025, 11:59 PM ET, this market will resolve to \"No\".\n\nThe resolution source will be audio of the event.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "economy",
+    "benchmark_score": 75,
+    "benchmark_reasoning": "This event requires monitoring a specific meeting and counting mentions of a term, which involves some level of ambiguity and judgement. While it is resolvable through standard sources, the need to track a specific phrase in a live setting adds complexity.",
+    "tests_aspects": [
+      "data_sourcing",
+      "judgement",
+      "ambiguity_handling"
+    ]
+  },
+  {
+    "event_id": 123163946320938,
+    "title": "Will xAI have a #1 AI model this year?",
+    "description": "This market will resolve to \"Yes\" if the listed company has the highest arena score on the Chatbot Arena LLM Leaderboard (https://lmarena.ai/) by December 31, 2025, 11:59 PM ET. Otherwise, this market will resolve to \"No.\"\n\nResults from the \"Arena Score\" section on the Leaderboard tab of https://lmarena.ai/ with the style control unchecked will be used to resolve this market.\n\nIf a listed modeI ties for #1 Arena score, it will suffice to resolve this market to \"Yes.\"\n\nThe resolution source for this market is the Chatbot Arena LLM Leaderboard found at https://lmarena.ai/. If this resolution source becomes unavailable, the market will remain open until it is accessible again. If it becomes permanently unavailable, resolution will be based on another credible source.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "tech",
+    "benchmark_score": 70,
+    "benchmark_reasoning": "This event requires monitoring a specific leaderboard and involves some judgment regarding the ranking of AI models, making it moderately complex. However, the resolution relies on a single source, which limits its challenge.",
+    "tests_aspects": [
+      "data_sourcing",
+      "judgement",
+      "verification"
+    ]
+  },
+  {
+    "event_id": 24294443550996,
+    "title": "Magnificent 7 shrinks below 30% of S&P 500 in 2025?",
+    "description": "This market will resolve to \"Yes\" if the combined cap weight of the Magnificent Seven stocks (Apple, Microsoft, Amazon, Google (Alphabet Class A and C), Meta, Tesla, and Nvidia) in the S&P 500 index, calculated using the official S&P 500 index cap weighting formula, falls below 30% on any trading day (using market close prices) by the last day of trading in 2025. Otherwise, this market will resolve to \"No.\"\n\nThe resolution source for this market will be daily closes prices applied to the cap weighting formula for the S&P 500.",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "economy",
+    "benchmark_score": 70,
+    "benchmark_reasoning": "This event requires tracking the market capitalization of specific stocks over time, which involves data sourcing and numerical comparison. While it is moderately complex, it primarily relies on standard financial data sources, making it less challenging than events requiring non-textual evidence.",
+    "tests_aspects": [
+      "data_sourcing",
+      "numerical_comparison",
+      "time_sensitivity"
+    ]
+  },
+  {
+    "event_id": 203751406017129,
+    "title": "Will the US add between 0 and 25k jobs in September?",
+    "description": "This market will resolve according to the nonfarm payroll employment reported by the BLS \"Employment Situation Summary\" for September 2025, scheduled to be released on October 3, 2025, 8:30 AM ET.\n\nIf the reported value falls exactly between two brackets, then this market will resolve to the higher range bracket.\n\nIf no data for September is released by the date the next month's data is scheduled to be released, this market will resolve based on data from the last available month.\n\nThe BLS \"Employment Situation Summary\" may be found here: https://www.bls.gov/bls/newsrels.htm",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "economy",
+    "benchmark_score": 70,
+    "benchmark_reasoning": "This event requires some judgement regarding the interpretation of employment data and has a specific resolution criterion based on the BLS report, making it moderately complex. However, it primarily relies on standard data sources, which limits its challenge level.",
+    "tests_aspects": [
+      "data_sourcing",
+      "judgement",
+      "conditional_logic"
+    ]
+  },
+  {
+    "event_id": 238823861171502,
+    "title": "Will there be an Emergency Use Authorization (EUA) granted for a COVID-19 vaccine prior to Nov 3 2020?",
+    "description": "This market is on if there will be an Emergency Use Authorization (EUA) granted for a COVID-19 vaccine before November 3rd, 2020. \"The Emergency Use Authorization (EUA) authority allows FDA to help strengthen the nation’s public health protections against CBRN threats by facilitating the availability and use of MCMs needed during public health emergencies.\" The market will resolve to \"Yes\" if an EUA is granted for a COVID-19 vaccine, according to this link: https://www.fda.gov/emergency-preparedness-and-response/mcm-legal-regulatory-and-policy-framework/emergency-use-authorization#covid19euas, before November 3rd, 2020 (election day). Even if the vaccine is not widely distributed by that date, if an EUA is granted, the market will resolve to \"Yes\". If no EUA is granted for a vaccine by November 3rd, 2020, the market will resolve “No”. Note, this market is only for vaccines, not general treatment. In the event of ambiguity in terms of the market outcome, the market will be resolved at the sole discretion of the Markets Integrity Committee (MIC).",
+    "start_time": null,
+    "end_time": null,
+    "is_closed": true,
+    "result": "Yes",
+    "category": "health",
+    "benchmark_score": 70,
+    "benchmark_reasoning": "This event involves the complex regulatory process of granting an Emergency Use Authorization for a COVID-19 vaccine, which requires understanding of public health policy and FDA procedures. While it has a clear resolution, the implications and timing add a layer of complexity that tests oracle capabilities.",
+    "tests_aspects": [
+      "data_sourcing",
+      "judgement",
+      "time_sensitivity"
+    ]
+  }
+]

@@ -106,6 +106,10 @@ class PipelineConfig:
     max_audit_evidence_chars: int = 300_000
     max_audit_evidence_items: int = 100
     
+    # Quality check retry loop
+    enable_quality_check: bool = False
+    max_quality_retries: int = 2
+
     # Debug
     debug: bool = False
     
@@ -368,6 +372,11 @@ class Pipeline:
         steps = [
             make_step("evidence_collection",
                 lambda s: self._step_evidence_collection(s, overrides.collector)),
+        ]
+        if self.config.enable_quality_check:
+            steps.append(make_step("quality_check",
+                lambda s: self._step_quality_check_and_retry(s, overrides.collector)))
+        steps += [
             make_step("audit",
                 lambda s: self._step_audit(s, overrides.auditor)),
             make_step("judge",
@@ -416,7 +425,12 @@ class Pipeline:
         # Step 2: Evidence collection
         steps.append(make_step("evidence_collection",
             lambda s: self._step_evidence_collection(s, overrides.collector)))
-        
+
+        # Step 2.5: Quality check + retry (optional)
+        if self.config.enable_quality_check:
+            steps.append(make_step("quality_check",
+                lambda s: self._step_quality_check_and_retry(s, overrides.collector)))
+
         # Step 3: Audit
         steps.append(make_step("audit",
             lambda s: self._step_audit(s, overrides.auditor)))
@@ -532,6 +546,84 @@ class Pipeline:
         
         return state
     
+    def _step_quality_check_and_retry(
+        self,
+        state: PipelineState,
+        collector_override: Optional[str],
+    ) -> PipelineState:
+        """Step 2.5: Quality check with optional retry loop.
+
+        Runs compute_scorecard on collected evidence. If quality does not
+        meet the threshold, re-runs evidence collection with retry_hints
+        up to ``config.max_quality_retries`` times.
+        """
+        if not state.prompt_spec or not state.evidence_bundles:
+            return state  # Nothing to check
+
+        from agents.quality import compute_scorecard
+
+        for attempt in range(1, self.config.max_quality_retries + 1):
+            scorecard = compute_scorecard(state.prompt_spec, state.evidence_bundles)
+            state.quality_scorecard = scorecard
+
+            logger.info(
+                f"Quality check: level={scorecard.quality_level}, "
+                f"meets_threshold={scorecard.meets_threshold}, "
+                f"flags={scorecard.quality_flags}"
+            )
+
+            if scorecard.meets_threshold:
+                state.add_check(CheckResult.passed(
+                    "quality_check",
+                    f"Evidence quality {scorecard.quality_level} — proceed to audit",
+                ))
+                return state
+
+            # Quality not sufficient — retry collection with hints
+            logger.info(
+                f"Quality check retry {attempt}/{self.config.max_quality_retries}: "
+                f"flags={scorecard.quality_flags}"
+            )
+
+            ctx = self._resolve_ctx(state.context, AgentStep.COLLECTOR)
+            ctx.extra["quality_feedback"] = scorecard.retry_hints
+
+            try:
+                agent = self._select_agent(AgentStep.COLLECTOR, collector_override, ctx)
+                if agent is None:
+                    state.add_check(CheckResult.warning(
+                        "quality_check",
+                        "Cannot retry — no collector agent available",
+                    ))
+                    return state
+
+                result: AgentResult = agent.run(ctx, state.prompt_spec, state.tool_plan)
+                if result.success:
+                    evidence_bundle, execution_log = result.output
+                    evidence_bundle.collector_name = agent.name
+                    state.evidence_bundles.append(evidence_bundle)
+                    state.execution_log = execution_log
+            except Exception as e:
+                logger.warning(f"Quality retry {attempt} failed: {e}")
+
+        # Final check after all retries
+        scorecard = compute_scorecard(state.prompt_spec, state.evidence_bundles)
+        state.quality_scorecard = scorecard
+
+        if scorecard.meets_threshold:
+            state.add_check(CheckResult.passed(
+                "quality_check",
+                f"Evidence quality {scorecard.quality_level} after retries",
+            ))
+        else:
+            state.add_check(CheckResult.warning(
+                "quality_check",
+                f"Evidence quality {scorecard.quality_level} after "
+                f"{self.config.max_quality_retries} retries — proceeding anyway",
+            ))
+
+        return state
+
     def _step_audit(
         self,
         state: PipelineState,
@@ -543,6 +635,15 @@ class Pipeline:
         if not state.prompt_spec or not state.evidence_bundles:
             state.add_error("Cannot audit: missing prompt_spec or evidence_bundles")
             return state
+
+        # Pass quality scorecard to auditor if available
+        if state.quality_scorecard:
+            ctx.extra["quality_context"] = state.quality_scorecard.model_dump(mode="json")
+
+        # Pass temporal constraint from prompt_spec to auditor if available
+        temporal_constraint = state.prompt_spec.extra.get("temporal_constraint")
+        if temporal_constraint:
+            ctx.extra["temporal_context"] = temporal_constraint
 
         try:
             agent = self._select_agent(AgentStep.AUDITOR, override, ctx)
@@ -588,6 +689,15 @@ class Pipeline:
         if not state.prompt_spec or not state.evidence_bundles or not state.audit_trace:
             state.add_error("Cannot judge: missing required artifacts")
             return state
+
+        # Pass quality scorecard to judge if available
+        if state.quality_scorecard:
+            ctx.extra["quality_context"] = state.quality_scorecard.model_dump(mode="json")
+
+        # Pass temporal constraint from prompt_spec to judge if available
+        temporal_constraint = state.prompt_spec.extra.get("temporal_constraint")
+        if temporal_constraint:
+            ctx.extra["temporal_context"] = temporal_constraint
 
         try:
             agent = self._select_agent(AgentStep.JUDGE, override, ctx)

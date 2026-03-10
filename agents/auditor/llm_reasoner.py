@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 from core.schemas import (
@@ -34,6 +35,33 @@ DEFAULT_AUDIT_RESERVE_TOKENS = 15_000
 # Primary evidence (e.g. HTML) needs more chars than metadata; keep body content for status pages
 MAX_PRIMARY_EVIDENCE_CHARS = 12_000
 MAX_NESTED_VALUE_CHARS = 2_000
+
+
+def _resolve_temporal_status(event_time_raw: str, current_time: datetime) -> str:
+    """Compute FUTURE/ACTIVE/PAST from event_time vs current_time.
+
+    - FUTURE: event_time is more than 24 hours after current_time
+    - ACTIVE: event_time is within the past 24 hours (event recently started
+      or happening now — outcome may not be available yet)
+    - PAST: event_time is more than 24 hours before current_time
+    """
+    try:
+        event_dt = datetime.fromisoformat(event_time_raw.replace("Z", "+00:00"))
+        if event_dt.tzinfo is None:
+            event_dt = event_dt.replace(tzinfo=timezone.utc)
+    except (ValueError, AttributeError):
+        return "UNKNOWN"
+
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+
+    from datetime import timedelta
+    if event_dt > current_time:
+        return "FUTURE"
+    elif current_time - event_dt < timedelta(hours=24):
+        return "ACTIVE"
+    else:
+        return "PAST"
 
 
 class LLMReasoner:
@@ -130,6 +158,16 @@ class LLMReasoner:
         if dispute_ctx:
             messages.append({"role": "user", "content": self._build_dispute_prompt(dispute_ctx)})
 
+        # Inject quality context if present (from quality check scorecard)
+        quality_ctx = ctx.extra.get("quality_context")
+        if quality_ctx:
+            messages.append({"role": "user", "content": self._build_quality_context_prompt(quality_ctx)})
+
+        # Inject temporal context if present
+        temporal_ctx = ctx.extra.get("temporal_context")
+        if temporal_ctx:
+            messages.append({"role": "user", "content": self._build_temporal_context_prompt(temporal_ctx, ctx.now())})
+
         # Secondary truncation: if estimated tokens exceed target, reduce evidence and rebuild
         while self._estimate_tokens(messages) > target_tokens and max_chars > 2000:
             max_chars = max(2000, max_chars // 2)
@@ -218,7 +256,109 @@ class LLMReasoner:
             ]
         )
         return "\n".join(parts)
-    
+
+    @staticmethod
+    def _build_quality_context_prompt(quality_ctx: dict[str, Any]) -> str:
+        """Build an evidence quality advisory block for the LLM messages.
+
+        Informs the auditor about evidence quality issues identified by
+        the quality check so it can factor source reliability into its
+        reasoning — especially returning INVALID when evidence comes
+        from wrong or unreliable sources.
+        """
+        parts: list[str] = [
+            "## EVIDENCE QUALITY ADVISORY",
+            "",
+            f"Quality level: {quality_ctx.get('quality_level', 'UNKNOWN')}",
+            f"Meets threshold: {quality_ctx.get('meets_threshold', 'unknown')}",
+        ]
+
+        flags = quality_ctx.get("quality_flags", [])
+        if flags:
+            parts.append(f"Quality flags: {', '.join(flags)}")
+
+        source_match = quality_ctx.get("source_match")
+        if source_match:
+            parts.append(f"Source match: {source_match}")
+
+        recommendations = quality_ctx.get("recommendations", [])
+        if recommendations:
+            parts.append("")
+            parts.append("Issues identified:")
+            for rec in recommendations:
+                parts.append(f"- {rec}")
+
+        parts.extend([
+            "",
+            "INSTRUCTIONS:",
+            "1) Factor these quality signals into your confidence assessment.",
+            "2) If source_match is NONE, the evidence was NOT collected from the",
+            "   required authoritative data sources. Evidence from wrong sources",
+            "   should be treated as unreliable for resolution.",
+            "3) If quality_level is LOW, strongly consider returning INVALID with",
+            "   low confidence. Do NOT return a definitive YES or NO based on",
+            "   evidence that failed quality checks.",
+            "4) If the evidence does not come from the required domains specified",
+            "   in the market rules, this is equivalent to having no usable evidence.",
+            "5) Include a note about evidence quality in your reasoning_summary.",
+        ])
+        return "\n".join(parts)
+
+    @staticmethod
+    def _build_temporal_context_prompt(
+        temporal_ctx: dict[str, Any],
+        current_time: datetime,
+    ) -> str:
+        """Build a temporal advisory block for the LLM messages.
+
+        Computes the temporal status (FUTURE/ACTIVE/PAST) at resolution time
+        by comparing the event_time against current_time, then informs the
+        auditor so it can return INVALID for future events rather than
+        confidently answering YES/NO.
+        """
+        event_time_raw = temporal_ctx.get("event_time", "")
+        reason = temporal_ctx.get("reason", "No reason provided")
+
+        # Compute status from event_time vs current_time
+        status = _resolve_temporal_status(event_time_raw, current_time)
+
+        parts: list[str] = [
+            "## TEMPORAL ADVISORY",
+            "",
+            f"Temporal status: {status}",
+            f"Event time: {event_time_raw}",
+            f"Current time: {current_time.isoformat()}",
+            f"Reason: {reason}",
+            "",
+        ]
+
+        if status == "FUTURE":
+            parts.extend([
+                "INSTRUCTIONS:",
+                "1) This event has NOT happened yet. It is scheduled for the future.",
+                "2) You MUST return preliminary_outcome = INVALID regardless of",
+                "   how confident the evidence appears.",
+                "3) Set preliminary_confidence to a low value (0.2-0.3).",
+                "4) In reasoning_summary, note that the event is in the future and",
+                "   cannot be resolved yet.",
+            ])
+        elif status == "ACTIVE":
+            parts.extend([
+                "INSTRUCTIONS:",
+                "1) This event is currently in progress or recently started.",
+                "2) Only return YES or NO if evidence confirms a CONCLUDED outcome.",
+                "3) If no post-conclusion evidence exists, return INVALID — the event",
+                "   may still produce a different result.",
+                "4) 'No evidence yet' during an active event is INVALID, not NO.",
+            ])
+        else:
+            parts.extend([
+                "INSTRUCTIONS:",
+                "1) This event is in the past. Evaluate evidence normally.",
+            ])
+
+        return "\n".join(parts)
+
     def _prepare_evidence_json(
         self,
         bundles: list[EvidenceBundle],

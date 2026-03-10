@@ -204,6 +204,31 @@ Compiles a natural language query into a structured `PromptSpec` and `ToolPlan`.
 }
 ```
 
+**Temporal constraint auto-detection:** When the query involves a scheduled event with a specific date/time, the LLM compiler automatically populates `prompt_spec.extra.temporal_constraint`. The frontend should extract this and pass it back to `/step/audit` and `/step/judge`.
+
+```json
+{
+  "ok": true,
+  "prompt_spec": {
+    "extra": {
+      "temporal_constraint": {
+        "enabled": true,
+        "event_time": "2027-05-31T00:00:00Z",
+        "reason": "Champions League final scheduled for May 31 2027"
+      }
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | bool | Always `true` when present |
+| `event_time` | string (ISO 8601 UTC) | When the event is scheduled to occur or conclude |
+| `reason` | string | Why temporal awareness matters for this query |
+
+When `temporal_constraint` is absent from `prompt_spec.extra`, the query has no temporal signal — no special handling needed.
+
 ### Step: Collect
 
 ```bash
@@ -226,6 +251,50 @@ Available collectors: `CollectorWebPageReader`, `CollectorHyDE`, `CollectorHTTP`
 }
 ```
 
+### Step: Quality Check
+
+```bash
+POST /step/quality_check
+```
+
+Evaluate evidence quality before proceeding to audit. Returns a scorecard with quality signals and retry hints. If quality is below threshold, retry `/step/collect` with the `quality_feedback` field.
+
+**Request Body:**
+```json
+{
+  "prompt_spec": { "..." : "..." },
+  "evidence_bundles": [ { "..." : "..." } ]
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "scorecard": {
+    "overall_score": 0.65,
+    "meets_threshold": false,
+    "retry_hints": {
+      "search_queries": ["more specific query"],
+      "required_domains": ["reuters.com"],
+      "skip_domains": [],
+      "data_type_hint": null,
+      "focus_requirements": ["req_001"],
+      "collector_guidance": "Try broader search terms"
+    }
+  },
+  "meets_threshold": false,
+  "errors": []
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `prompt_spec` | object | yes | Compiled prompt specification (from `/step/prompt`) |
+| `evidence_bundles` | list[object] | yes | Evidence bundles (from `/step/collect`) |
+
+**Frontend flow:** Call quality check after collect. If `meets_threshold` is `false` and `retry_hints` is non-empty, retry `/step/collect` with `quality_feedback` set to the `retry_hints` object. Repeat up to 2 times.
+
 ### Step: Audit
 
 ```bash
@@ -238,7 +307,36 @@ Analyze evidence and generate a reasoning trace. Pass the `prompt_spec` and `evi
 ```json
 {
   "prompt_spec": { "..." : "..." },
-  "evidence_bundles": [ { "..." : "..." } ]
+  "evidence_bundles": [ { "..." : "..." } ],
+  "quality_scorecard": { "..." : "..." },
+  "temporal_constraint": {
+    "enabled": true,
+    "event_time": "2027-05-31T00:00:00Z",
+    "reason": "Champions League final scheduled for May 31 2027"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `prompt_spec` | object | yes | Compiled prompt specification |
+| `evidence_bundles` | list[object] | yes | Evidence bundles (from `/step/collect`) |
+| `execution_mode` | string | no | `"production"`, `"development"` (default), or `"test"` |
+| `llm_provider` | string | no | LLM provider override |
+| `llm_model` | string | no | LLM model override |
+| `quality_scorecard` | object | no | Quality scorecard from `/step/quality_check`. Informs the auditor about evidence quality issues. |
+| `temporal_constraint` | object | no | Temporal constraint from `prompt_spec.extra.temporal_constraint`. When provided, the auditor computes temporal status (FUTURE/ACTIVE/PAST) at resolution time and may force INVALID for future events. |
+
+**Response:**
+```json
+{
+  "ok": true,
+  "reasoning_trace": {
+    "trace_id": "trace_mk_...",
+    "steps": [ { "step_type": "evidence_review", "..." : "..." } ],
+    "preliminary_outcome": "YES"
+  },
+  "errors": []
 }
 ```
 
@@ -255,7 +353,49 @@ Review reasoning and produce a final verdict. Pass the `prompt_spec`, `evidence_
 {
   "prompt_spec": { "..." : "..." },
   "evidence_bundles": [ { "..." : "..." } ],
-  "reasoning_trace": { "..." : "..." }
+  "reasoning_trace": { "..." : "..." },
+  "quality_scorecard": { "..." : "..." },
+  "temporal_constraint": {
+    "enabled": true,
+    "event_time": "2027-05-31T00:00:00Z",
+    "reason": "Champions League final scheduled for May 31 2027"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `prompt_spec` | object | yes | Compiled prompt specification |
+| `evidence_bundles` | list[object] | yes | Evidence bundles (from `/step/collect`) |
+| `reasoning_trace` | object | yes | Reasoning trace (from `/step/audit`) |
+| `execution_mode` | string | no | `"production"`, `"development"` (default), or `"test"` |
+| `llm_provider` | string | no | LLM provider override |
+| `llm_model` | string | no | LLM model override |
+| `quality_scorecard` | object | no | Quality scorecard from `/step/quality_check`. Informs the judge about evidence quality issues. |
+| `temporal_constraint` | object | no | Temporal constraint from `prompt_spec.extra.temporal_constraint`. When provided, the judge computes temporal status (FUTURE/ACTIVE/PAST) at resolution time and may force INVALID for future events. |
+
+**Temporal status computation:** Both audit and judge compute temporal status at resolution time by comparing `event_time` against the current clock:
+
+| Condition | Status | Effect |
+|-----------|--------|--------|
+| `event_time > now` | `FUTURE` | Forces outcome to `INVALID` — event hasn't happened yet |
+| `now - event_time < 24h` | `ACTIVE` | Forces `INVALID` unless evidence shows event has concluded |
+| `now - event_time >= 24h` | `PAST` | Normal resolution — no temporal override |
+| Parse failure | `UNKNOWN` | Normal resolution — temporal system disengaged |
+
+**Response:**
+```json
+{
+  "ok": true,
+  "verdict": {
+    "market_id": "mk_...",
+    "outcome": "YES",
+    "confidence": 0.85,
+    "resolution_rule_id": "R_THRESHOLD"
+  },
+  "outcome": "YES",
+  "confidence": 0.85,
+  "errors": []
 }
 ```
 
@@ -706,10 +846,10 @@ print(json.dumps({
 ")"
 ```
 
-**Step 3: Audit** — analyze evidence and generate a reasoning trace.
+**Step 2.5: Quality Check** _(optional but recommended)_ — evaluate evidence quality and retry if needed.
 
 ```bash
-curl -s -X POST http://localhost:8000/step/audit \
+curl -s -X POST http://localhost:8000/step/quality_check \
   -H "Content-Type: application/json" \
   -d "$(python3 -c "
 import json
@@ -719,6 +859,48 @@ print(json.dumps({
     'prompt_spec': prompt['prompt_spec'],
     'evidence_bundles': collect['evidence_bundles']
 }))
+")" -o quality_out.json
+```
+
+If `meets_threshold` is false and `retry_hints` is non-empty, retry collect with feedback:
+
+```bash
+curl -s -X POST http://localhost:8000/step/collect \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c "
+import json
+prompt = json.load(open('prompt_out.json'))
+qc = json.load(open('quality_out.json'))
+print(json.dumps({
+    'prompt_spec': prompt['prompt_spec'],
+    'tool_plan': prompt['tool_plan'],
+    'collectors': ['CollectorOpenSearch'],
+    'quality_feedback': qc['scorecard']['retry_hints']
+}))
+")" -o collect_retry_out.json
+```
+
+**Step 3: Audit** — analyze evidence and generate a reasoning trace. Pass `quality_scorecard` and `temporal_constraint` when available.
+
+```bash
+curl -s -X POST http://localhost:8000/step/audit \
+  -H "Content-Type: application/json" \
+  -d "$(python3 -c "
+import json
+prompt = json.load(open('prompt_out.json'))
+collect = json.load(open('collect_out.json'))
+# Extract optional fields
+quality_sc = json.load(open('quality_out.json')).get('scorecard')
+temporal = (prompt['prompt_spec'].get('extra') or {}).get('temporal_constraint')
+payload = {
+    'prompt_spec': prompt['prompt_spec'],
+    'evidence_bundles': collect['evidence_bundles'],
+}
+if quality_sc:
+    payload['quality_scorecard'] = quality_sc
+if temporal:
+    payload['temporal_constraint'] = temporal
+print(json.dumps(payload))
 ")" -o audit_out.json
 ```
 
@@ -739,7 +921,7 @@ Response (`audit_out.json`):
 }
 ```
 
-**Step 4: Judge** — produce a final verdict from the evidence and reasoning.
+**Step 4: Judge** — produce a final verdict from the evidence and reasoning. Pass the same `quality_scorecard` and `temporal_constraint`.
 
 ```bash
 curl -s -X POST http://localhost:8000/step/judge \
@@ -749,11 +931,18 @@ import json
 prompt = json.load(open('prompt_out.json'))
 collect = json.load(open('collect_out.json'))
 audit = json.load(open('audit_out.json'))
-print(json.dumps({
+quality_sc = json.load(open('quality_out.json')).get('scorecard')
+temporal = (prompt['prompt_spec'].get('extra') or {}).get('temporal_constraint')
+payload = {
     'prompt_spec': prompt['prompt_spec'],
     'evidence_bundles': collect['evidence_bundles'],
-    'reasoning_trace': audit['reasoning_trace']
-}))
+    'reasoning_trace': audit['reasoning_trace'],
+}
+if quality_sc:
+    payload['quality_scorecard'] = quality_sc
+if temporal:
+    payload['temporal_constraint'] = temporal
+print(json.dumps(payload))
 ")" -o judge_out.json
 ```
 
@@ -860,20 +1049,42 @@ evidence_bundles = collect_resp["evidence_bundles"]
 print(f"Collectors used: {collect_resp['collectors_used']}")
 print(f"Bundles collected: {len(evidence_bundles)}")
 
-# Step 3: Audit
-audit_resp = httpx.post(f"{BASE}/step/audit", json={
+# Step 2.5: Quality check (optional)
+qc_resp = httpx.post(f"{BASE}/step/quality_check", json={
     "prompt_spec": prompt_spec,
     "evidence_bundles": evidence_bundles,
 }).json()
+quality_scorecard = qc_resp.get("scorecard") if qc_resp.get("ok") else None
+
+# Extract temporal_constraint from prompt_spec.extra (auto-detected by PE)
+temporal_constraint = (prompt_spec.get("extra") or {}).get("temporal_constraint")
+
+# Step 3: Audit (with quality scorecard + temporal constraint)
+audit_payload = {
+    "prompt_spec": prompt_spec,
+    "evidence_bundles": evidence_bundles,
+}
+if quality_scorecard:
+    audit_payload["quality_scorecard"] = quality_scorecard
+if temporal_constraint:
+    audit_payload["temporal_constraint"] = temporal_constraint
+
+audit_resp = httpx.post(f"{BASE}/step/audit", json=audit_payload).json()
 reasoning_trace = audit_resp["reasoning_trace"]
 print(f"Preliminary outcome: {reasoning_trace.get('preliminary_outcome')}")
 
-# Step 4: Judge
-judge_resp = httpx.post(f"{BASE}/step/judge", json={
+# Step 4: Judge (with quality scorecard + temporal constraint)
+judge_payload = {
     "prompt_spec": prompt_spec,
     "evidence_bundles": evidence_bundles,
     "reasoning_trace": reasoning_trace,
-}).json()
+}
+if quality_scorecard:
+    judge_payload["quality_scorecard"] = quality_scorecard
+if temporal_constraint:
+    judge_payload["temporal_constraint"] = temporal_constraint
+
+judge_resp = httpx.post(f"{BASE}/step/judge", json=judge_payload).json()
 verdict = judge_resp["verdict"]
 print(f"Outcome: {judge_resp['outcome']} (confidence: {judge_resp['confidence']})")
 

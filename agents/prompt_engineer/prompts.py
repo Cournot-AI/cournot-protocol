@@ -91,9 +91,36 @@ There are two market types:
     "min_confidence_for_yesno": 0.55,
     "default_confidence": 0.7
   },
-  "assumptions": ["any assumptions made"]
+  "assumptions": ["any assumptions made"],
+  "temporal_constraint": {
+    "enabled": true,
+    "event_time": "ISO datetime",
+    "reason": "why temporal awareness matters"
+  }
 }
 ```
+
+### temporal_constraint (OPTIONAL)
+
+Only include `temporal_constraint` when the question involves a specific scheduled event or time-sensitive occurrence. This signals downstream agents to compare the event_time against the current resolution time to determine whether the event is in the future, active, or past.
+
+You do NOT decide whether the event is future or past — that is computed at resolution time by downstream agents. You only detect whether temporal awareness is relevant and provide the event_time.
+
+**Fields:**
+- `enabled`: Always `true` when included (omit the entire object if not applicable)
+- `event_time`: The specific date/time the event is scheduled for or expected to conclude, in ISO 8601 UTC format
+- `reason`: Brief explanation of why temporal awareness matters for this question
+
+**When to include temporal_constraint:**
+- The question references a specific date/time for a scheduled event (match, election, launch, deadline)
+- The question says "will", "scheduled for", "upcoming", "follow timeline"
+- The resolution_window is tied to a specific occurrence that may or may not have happened yet
+- A sporting event, election, or similar time-bound occurrence is involved
+
+**When NOT to include temporal_constraint:**
+- The question is about a continuously observable metric (e.g. "Is BTC above 100k?")
+- No clear temporal signal or scheduled event in the question
+- The question references a broad time range with no single event anchor
 
 ## Deferred Source Discovery
 

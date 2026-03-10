@@ -222,7 +222,21 @@ class RuleBasedReasoner:
         elif best_value is not None:
             # Non-threshold evaluation
             step_counter += 1
-            
+
+            # Three-way check: truthy → YES, explicitly negative → NO, else → UNCERTAIN
+            if self._is_truthy(best_value):
+                outcome = "YES"
+                decision_summary = "Evidence is affirmatively positive"
+                confidence_delta = 0.1
+            elif self._is_explicitly_negative(best_value):
+                outcome = "NO"
+                decision_summary = "Evidence explicitly indicates non-occurrence"
+                confidence_delta = 0.1
+            else:
+                outcome = "UNCERTAIN"
+                decision_summary = "Evidence is ambiguous or absent — not counter-evidence"
+                confidence_delta = -0.05
+
             trace.add_step(ReasoningStep(
                 step_id=f"step_{step_counter:03d}",
                 step_type="rule_application",
@@ -233,17 +247,12 @@ class RuleBasedReasoner:
                 )] if best_evidence else [],
                 rule_id="R_BINARY_DECISION",
                 input_summary=f"Best evidence value: {best_value}",
-                output_summary="Evaluating truthiness of evidence",
-                confidence_delta=0.1,
+                output_summary=decision_summary,
+                confidence_delta=confidence_delta,
             ))
-            
-            # Simple truthiness check
-            if self._is_truthy(best_value):
-                outcome = "YES"
-            else:
-                outcome = "NO"
+
             rule_applied = "R_BINARY_DECISION"
-            confidence += 0.1
+            confidence += confidence_delta
         
         else:
             # No usable value
@@ -560,6 +569,24 @@ class RuleBasedReasoner:
         if isinstance(value, str):
             return value.lower() in ("true", "yes", "1", "resolved", "confirmed")
         return bool(value)
+
+    def _is_explicitly_negative(self, value: Any) -> bool:
+        """Check if value is explicitly negative (not just falsy/absent).
+
+        Returns True only when the evidence actively indicates non-occurrence,
+        as opposed to being empty, ambiguous, or simply not confirming.
+        This prevents absence of evidence from being treated as evidence of absence.
+        """
+        if isinstance(value, bool):
+            return value is False
+        if isinstance(value, (int, float)):
+            return value == 0
+        if isinstance(value, str):
+            return value.lower().strip() in (
+                "false", "no", "0", "denied", "rejected",
+                "not met", "did not occur", "unresolved",
+            )
+        return False
     
     def _summarize_evidence(self, evidence: list[EvidenceItem]) -> str:
         """Generate evidence summary."""

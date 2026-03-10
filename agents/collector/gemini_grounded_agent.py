@@ -94,10 +94,18 @@ You MUST respond with ONLY the following JSON object and nothing else.
 Do NOT use markdown fences. Do NOT add extra keys.
 The JSON MUST have exactly these two keys: "outcome" and "reason".
 
-{"outcome": "Yes or No", "reason": "Brief explanation citing the specific evidence found"}
+{"outcome": "Yes or No or Unresolved", "reason": "Brief explanation citing the specific evidence found"}
 
-- "outcome" must be exactly "Yes" or "No" (capitalized first letter).
+- "outcome" must be exactly "Yes", "No", or "Unresolved" (capitalized first letter).
 - "reason" must be a brief string explaining your verdict with evidence.
+
+CRITICAL — When to use "Unresolved":
+- If the resolution source (video, audio, transcript, specific dataset) is not
+  available or you cannot access it, return "Unresolved". Do NOT guess "No".
+- If you searched but found no information about whether the event occurred,
+  return "Unresolved". Absence of evidence is NOT evidence of absence.
+- "No" means you found SPECIFIC EVIDENCE that the event did NOT occur.
+- "Unresolved" means you could not find sufficient evidence either way.
 """
 
 
@@ -163,8 +171,14 @@ def _sources_cover_domains(
 def _build_user_prompt(
     prompt_spec: PromptSpec,
     requirement: "DataRequirement",
+    quality_feedback: dict[str, Any] | None = None,
 ) -> str:
-    """Build the user prompt from PromptSpec fields."""
+    """Build the user prompt from PromptSpec fields.
+
+    If *quality_feedback* is provided (from a previous /step/quality_check),
+    the ``collector_guidance`` string is appended as a "PREVIOUS ATTEMPT
+    FEEDBACK" section so the LLM can adjust its search strategy.
+    """
     market = prompt_spec.market
     semantics = prompt_spec.prediction_semantics
 
@@ -193,11 +207,24 @@ def _build_user_prompt(
             f"You SHOULD include results from these domains in your search.\n"
         )
 
+    # Quality feedback section
+    feedback_section = ""
+    if quality_feedback:
+        guidance = quality_feedback.get("collector_guidance", "")
+        if guidance:
+            feedback_section = (
+                f"\n--- PREVIOUS ATTEMPT FEEDBACK ---\n"
+                f"{guidance}\n"
+                f"Use this feedback to improve your search strategy.\n"
+                f"--- END FEEDBACK ---\n"
+            )
+
     return (
         f"Market question: {market.question}\n\n"
         f"Resolution rules:\n{rules_text}\n\n"
         f"Data requirement: {requirement.description}\n"
-        f"{source_hint}\n"
+        f"{source_hint}"
+        f"{feedback_section}\n"
         f"Target entity: {semantics.target_entity}\n"
         f"Predicate: {semantics.predicate}\n"
         f"Threshold: {semantics.threshold or 'N/A'}\n\n"
@@ -304,6 +331,14 @@ class CollectorOpenSearch(BaseAgent):
 
         client = self._get_client(api_key)
 
+        # Read quality feedback from ctx.extra (set by /step/collect handler)
+        quality_feedback: dict[str, Any] | None = ctx.extra.get("quality_feedback")
+        focus_requirements: list[str] | None = None
+        if quality_feedback:
+            focus_requirements = quality_feedback.get("focus_requirements")
+            ctx.info(f"[CollectorOpenSearch] Quality feedback received: "
+                     f"keys={list(quality_feedback.keys())}")
+
         bundle = EvidenceBundle(
             bundle_id=f"open_search_{tool_plan.plan_id}",
             market_id=prompt_spec.market_id,
@@ -315,12 +350,18 @@ class CollectorOpenSearch(BaseAgent):
         )
 
         for req_id in tool_plan.requirements:
+            # Skip requirements not in focus list (if quality feedback specifies)
+            if focus_requirements and req_id not in focus_requirements:
+                ctx.info(f"[CollectorOpenSearch] Skipping {req_id} (not in focus_requirements)")
+                continue
+
             requirement = prompt_spec.get_requirement_by_id(req_id)
             if not requirement:
                 continue
 
             evidence, record = self._collect_requirement(
                 ctx, client, prompt_spec, requirement,
+                quality_feedback=quality_feedback,
             )
             bundle.add_item(evidence)
             execution_log.add_call(record)
@@ -369,6 +410,7 @@ class CollectorOpenSearch(BaseAgent):
         client: Any,
         prompt_spec: PromptSpec,
         requirement: "DataRequirement",
+        quality_feedback: dict[str, Any] | None = None,
     ) -> tuple[EvidenceItem, ToolCallRecord]:
         req_id = requirement.requirement_id
         evidence_id = hashlib.sha256(
@@ -377,7 +419,9 @@ class CollectorOpenSearch(BaseAgent):
 
         required_domains = _extract_required_domains(requirement)
 
-        user_prompt = _build_user_prompt(prompt_spec, requirement)
+        user_prompt = _build_user_prompt(
+            prompt_spec, requirement, quality_feedback=quality_feedback,
+        )
 
         record = ToolCallRecord(
             tool="open_search:search_and_resolve",
@@ -483,7 +527,29 @@ class CollectorOpenSearch(BaseAgent):
                 )
 
             combined_text = json.dumps(final_parsed)
-            success = outcome.lower() in ("yes", "no")
+            outcome_lower = outcome.lower()
+            is_definitive = outcome_lower in ("yes", "no")
+            is_unresolved = outcome_lower == "unresolved"
+
+            # Determine resolution status:
+            # - RESOLVED only if definitive outcome (yes/no)
+            # - UNRESOLVED if Gemini explicitly said "Unresolved" or gave
+            #   an unexpected outcome
+            if is_definitive:
+                resolution_status = "RESOLVED"
+                confidence_score = 0.9
+                success = True
+                error_msg = None
+            elif is_unresolved:
+                resolution_status = "UNRESOLVED"
+                confidence_score = 0.0
+                success = True  # valid response, just not resolvable
+                error_msg = None
+            else:
+                resolution_status = "UNRESOLVED"
+                confidence_score = 0.0
+                success = False
+                error_msg = f"Unexpected outcome: {outcome!r}"
 
             return EvidenceItem(
                 evidence_id=evidence_id,
@@ -496,20 +562,20 @@ class CollectorOpenSearch(BaseAgent):
                     content_hash=hashlib.sha256(combined_text.encode()).hexdigest(),
                 ),
                 raw_content=reason[:500] if reason else combined_text[:500],
-                parsed_value=outcome,
+                parsed_value=outcome if is_definitive else None,
                 extracted_fields={
                     "outcome": outcome,
                     "reason": reason,
                     "evidence_sources": evidence_sources,
                     "grounding_search_queries": final_grounding.get("search_queries", []),
                     "grounding_source_count": len(evidence_sources),
-                    "confidence_score": 0.9 if success else 0.0,
-                    "resolution_status": "RESOLVED" if success else "UNRESOLVED",
+                    "confidence_score": confidence_score,
+                    "resolution_status": resolution_status,
                     "pass_used": pass_used,
                     "data_source_domains_required": [d["domain"] for d in required_domains],
                 },
                 success=success,
-                error=None if success else f"Unexpected outcome: {outcome!r}",
+                error=error_msg,
             ), record
 
         except Exception as e:

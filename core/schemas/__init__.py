@@ -108,6 +108,12 @@ from .proof import (
     SentinelReport,
 )
 
+# Quality schemas
+from .quality import (
+    EvidenceQualityScorecard,
+    QualityLevel,
+)
+
 # Verdict schemas
 from .verdict import (
     BinaryOutcome,
@@ -207,6 +213,9 @@ __all__ = [
     "Outcome",
     "VerdictJustification",
     "VerdictValidationResult",
+    # Quality
+    "EvidenceQualityScorecard",
+    "QualityLevel",
     # Verification
     "VerificationResult",
     "CheckResult",

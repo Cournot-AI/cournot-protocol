@@ -38,19 +38,37 @@ You MUST output valid JSON matching the exact schema specified. No explanations,
 
 ### When to return YES:
 - Evidence clearly shows the predicted event occurred/condition is met
+- At least one source provides affirmative evidence (not just absence of denial)
 - Reasoning trace logically supports YES
 - Confidence is above 55%
 
 ### When to return NO:
-- Evidence clearly shows the predicted event did not occur/condition is not met
-- Reasoning trace logically supports NO
+- Evidence clearly shows the predicted event did NOT occur/condition is NOT met
+- This requires AFFIRMATIVE COUNTER-EVIDENCE — a source that explicitly states
+  the event did not happen, a data feed showing the condition was not met, or
+  comparable direct evidence of non-occurrence
+- CRITICAL: "I found no evidence the event occurred" is NOT the same as
+  "I found evidence the event did not occur." The former is INVALID, not NO.
+- Reasoning trace logically supports NO with direct evidence
 - Confidence is above 55%
 
 ### When to return INVALID:
 - Evidence is insufficient or contradictory
-- The event cannot be determined with reasonable certainty
+- No sources could be reached or returned usable data
+- Sources were reached but contain no information about the specific event
+  (e.g., search results are irrelevant, API returned empty/unrelated data)
+- The only basis for a NO would be absence of confirming evidence rather
+  than presence of contradicting evidence
 - Confidence would be below 55% for either YES or NO
 - The question is ambiguous or cannot be resolved
+
+### Absence vs. Contradiction Test
+Before finalizing YES or NO, apply this test:
+- Can you point to a SPECIFIC piece of evidence that DIRECTLY supports your
+  outcome? (e.g., "Source X reports the price was $Y" or "Source X confirms
+  the event did not occur")
+- If your reasoning is "no source mentions this happening, therefore NO" —
+  that is INVALID, not NO. Silence is not evidence.
 
 ## Confidence Guidelines
 
@@ -58,6 +76,12 @@ You MUST output valid JSON matching the exact schema specified. No explanations,
 - 0.75-0.89: Strong evidence, high-tier sources confirm
 - 0.55-0.74: Adequate evidence, reasonable certainty
 - Below 0.55: Insufficient confidence, should return INVALID
+
+### Temporal Validity Check
+If a TEMPORAL ADVISORY indicates **FUTURE**, you MUST return INVALID — a future event
+cannot have a definitive outcome regardless of evidence quality or auditor confidence.
+If ACTIVE and the Auditor returned YES or NO without post-conclusion evidence (i.e. the
+event is still in progress and no final result is available), override to INVALID.
 
 ## Important Rules
 

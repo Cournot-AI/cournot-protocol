@@ -22,6 +22,7 @@ from core.por.proof_of_reasoning import PoRRoots
 from core.por.reasoning_trace import ReasoningTrace
 from core.schemas.evidence import EvidenceBundle
 from core.schemas.prompts import PromptSpec
+from core.schemas.quality import EvidenceQualityScorecard
 from core.schemas.transport import ToolExecutionLog, ToolPlan
 from core.schemas.verdict import DeterministicVerdict
 from core.schemas.verification import CheckResult, VerificationResult
@@ -52,7 +53,10 @@ class PipelineState:
     # Step 2: Evidence collection
     evidence_bundles: list["EvidenceBundle"] = field(default_factory=list)
     execution_log: Optional[ToolExecutionLog] = None
-    
+
+    # Step 2.5: Quality check (optional, for feedback loop)
+    quality_scorecard: Optional[EvidenceQualityScorecard] = None
+
     # Step 3: Audit / reasoning trace
     audit_trace: Optional[ReasoningTrace] = None
     audit_verification: Optional[VerificationResult] = None

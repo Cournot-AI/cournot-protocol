@@ -4,12 +4,13 @@ Module 09D - Steps Route
 Execute individual pipeline steps.
 
 Endpoints:
-- POST /step/prompt   - Compile query into PromptSpec + ToolPlan
-- POST /step/collect  - Collect evidence from sources
-- POST /step/audit    - Generate reasoning trace
-- POST /step/judge    - Produce final verdict
-- POST /step/bundle   - Build PoR bundle
-- POST /step/resolve  - Run all steps (collect → audit → judge → bundle)
+- POST /step/prompt        - Compile query into PromptSpec + ToolPlan
+- POST /step/collect       - Collect evidence from sources
+- POST /step/quality_check - Assess evidence quality, return retry hints
+- POST /step/audit         - Generate reasoning trace
+- POST /step/judge         - Produce final verdict
+- POST /step/bundle        - Build PoR bundle
+- POST /step/resolve       - Run all steps (collect → audit → judge → bundle)
 """
 
 from __future__ import annotations
@@ -175,6 +176,12 @@ class CollectRequest(BaseModel):
         default=None,
         description="PAN RNG seed for determinism. Only used with CollectorPAN.",
     )
+    quality_feedback: dict[str, Any] | None = Field(
+        default=None,
+        description="Feedback from a previous /step/quality_check call. "
+        "Contains retry_hints with search_queries, required_domains, "
+        "skip_domains, data_type_hint, focus_requirements, and collector_guidance.",
+    )
 
 
 class CollectResponse(BaseModel):
@@ -187,6 +194,35 @@ class CollectResponse(BaseModel):
     )
     execution_logs: list[dict[str, Any]] = Field(
         default_factory=list, description="Execution logs from each collector"
+    )
+    errors: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Quality Check Step
+# ---------------------------------------------------------------------------
+
+class QualityCheckRequest(BaseModel):
+    """Request for evidence quality check step."""
+
+    prompt_spec: dict[str, Any] = Field(
+        ..., description="Compiled prompt specification (from /step/prompt)"
+    )
+    evidence_bundles: list[dict[str, Any]] = Field(
+        ..., description="Evidence bundles (from /step/collect)"
+    )
+
+
+class QualityCheckResponse(BaseModel):
+    """Response from evidence quality check step."""
+
+    ok: bool = Field(..., description="Whether quality check succeeded")
+    scorecard: dict[str, Any] | None = Field(
+        default=None, description="Evidence quality scorecard"
+    )
+    meets_threshold: bool = Field(
+        default=False,
+        description="Whether evidence quality meets the threshold to proceed to audit",
     )
     errors: list[str] = Field(default_factory=list)
 
@@ -215,6 +251,16 @@ class AuditRequest(BaseModel):
     llm_model: str | None = Field(
         default=None,
         description="Override LLM model (e.g. 'gpt-4o', 'claude-sonnet-4-20250514'). Uses provider default if omitted.",
+    )
+    quality_scorecard: dict[str, Any] | None = Field(
+        default=None,
+        description="Quality scorecard from /step/quality_check. "
+        "When provided, informs the auditor about evidence quality issues.",
+    )
+    temporal_constraint: dict[str, Any] | None = Field(
+        default=None,
+        description="Temporal constraint from /step/prompt or frontend override. "
+        "When provided, informs the agent about event timing issues.",
     )
 
 
@@ -255,6 +301,16 @@ class JudgeRequest(BaseModel):
     llm_model: str | None = Field(
         default=None,
         description="Override LLM model (e.g. 'gpt-4o', 'claude-sonnet-4-20250514'). Uses provider default if omitted.",
+    )
+    quality_scorecard: dict[str, Any] | None = Field(
+        default=None,
+        description="Quality scorecard from /step/quality_check. "
+        "When provided, informs the judge about evidence quality issues.",
+    )
+    temporal_constraint: dict[str, Any] | None = Field(
+        default=None,
+        description="Temporal constraint from /step/prompt or frontend override. "
+        "When provided, informs the judge about event timing issues.",
     )
 
 
@@ -569,6 +625,11 @@ async def run_collect(request: CollectRequest) -> CollectResponse:
             request.llm_provider, request.llm_model, agent_name="collector",
         )
         ctx = get_agent_context(with_llm=True, with_http=True, llm_override=override)
+
+        # Pass quality feedback to collectors via ctx.extra
+        if request.quality_feedback:
+            ctx.extra["quality_feedback"] = request.quality_feedback
+
         registry = get_registry()
 
         bundles = []
@@ -669,6 +730,54 @@ async def run_collect(request: CollectRequest) -> CollectResponse:
         raise InternalError(f"Collect step failed: {str(e)}")
 
 
+@router.post("/quality_check", response_model=QualityCheckResponse)
+async def run_quality_check(request: QualityCheckRequest) -> QualityCheckResponse:
+    """
+    Run evidence quality check step.
+
+    Evaluates collected evidence against the prompt spec and returns
+    a scorecard with quality signals, recommendations, and retry_hints
+    that can be passed back to /step/collect for improved collection.
+    """
+    try:
+        logger.info("Running quality check step...")
+
+        from core.schemas.prompts import PromptSpec
+        from core.schemas.evidence import EvidenceBundle
+        from agents.quality import compute_scorecard
+
+        try:
+            prompt_spec = PromptSpec(**request.prompt_spec)
+        except Exception as e:
+            return QualityCheckResponse(ok=False, errors=[f"Invalid prompt_spec: {e}"])
+
+        evidence_bundles = []
+        for i, eb_dict in enumerate(request.evidence_bundles):
+            try:
+                evidence_bundles.append(EvidenceBundle(**eb_dict))
+            except Exception as e:
+                return QualityCheckResponse(
+                    ok=False, errors=[f"Invalid evidence_bundle[{i}]: {e}"]
+                )
+
+        if not evidence_bundles:
+            return QualityCheckResponse(ok=False, errors=["No evidence bundles provided"])
+
+        scorecard = await asyncio.to_thread(
+            compute_scorecard, prompt_spec, evidence_bundles
+        )
+
+        return QualityCheckResponse(
+            ok=True,
+            scorecard=scorecard.model_dump(mode="json"),
+            meets_threshold=scorecard.meets_threshold,
+        )
+
+    except Exception as e:
+        logger.exception("Quality check step failed")
+        raise InternalError(f"Quality check step failed: {str(e)}")
+
+
 @router.post("/audit", response_model=AuditResponse)
 async def run_audit(request: AuditRequest) -> AuditResponse:
     """
@@ -702,6 +811,14 @@ async def run_audit(request: AuditRequest) -> AuditResponse:
             request.llm_provider, request.llm_model, agent_name="auditor",
         )
         ctx = get_agent_context(with_llm=True, llm_override=override)
+
+        # Pass quality scorecard to auditor via ctx.extra
+        if request.quality_scorecard:
+            ctx.extra["quality_context"] = request.quality_scorecard
+
+        # Pass temporal constraint to auditor via ctx.extra
+        if request.temporal_constraint:
+            ctx.extra["temporal_context"] = request.temporal_constraint
 
         from agents.auditor import get_auditor
         auditor = get_auditor(ctx)
@@ -764,6 +881,14 @@ async def run_judge(request: JudgeRequest) -> JudgeResponse:
             request.llm_provider, request.llm_model, agent_name="judge",
         )
         ctx = get_agent_context(with_llm=True, llm_override=override)
+
+        # Pass quality scorecard to judge via ctx.extra
+        if request.quality_scorecard:
+            ctx.extra["quality_context"] = request.quality_scorecard
+
+        # Pass temporal constraint to judge via ctx.extra
+        if request.temporal_constraint:
+            ctx.extra["temporal_context"] = request.temporal_constraint
 
         # Select and run judge agent
         from agents.judge import get_judge

@@ -1,190 +1,109 @@
-# Handoff: Generalized Site Extractor Registry
+# Handoff: Temporal Guard — Benchmarking Phase
 
-## Goal
-Pluggable extractor registry for structured HTTP extraction (Phase 1.5), with domain-specific prompt hints for Cloudflare-guarded sites in Phase 2.
+## Branch: `feat/dashboard-dispute-contract`
 
-## Current State
-- **Strict collector** with three-phase approach:
-  1. **Phase 1: Serper pre-search** — uses LLM-generated discovery query (`_generate_discovery_query`) to find top 3 URLs on the required domain via `google.serper.dev/search`.
-  2. **Phase 1.5: Extractor registry dispatch + LLM resolution** — loops through discovered URLs, finds a matching `SiteExtractor` via `find_extractor()`, fetches structured data, builds a text summary, then asks Gemini to resolve. Currently supports **FotMob**. (FBRef was removed — see below.)
-  3. **Phase 2: Gemini UrlContext + GoogleSearch** — fallback if Phase 1.5 is not applicable or fails. Passes discovered URLs to Gemini via `UrlContext` tool for full page ingestion.
-- **Tests pass** across 4 test files:
-  - `test_fotmob.py` — FotMob data extraction
-  - `test_collector_source_pinned.py` — strict agent behavior
-  - `test_extractor_registry.py` — registry + FotMobExtractor
-  - `test_fotmob_live.py` — live FotMob fetch
-- **End-to-end API pipeline verified** for both stat-based and event-based markets.
-- **Branch:** `feat/extractor-registry` (6 commits)
+## What was implemented
 
-## What Changed This Session: Extractor Registry
+An opt-in temporal constraint system that prevents the LLM auditor/judge from confidently answering YES/NO for future or in-progress events. The temporal status (FUTURE/ACTIVE/PAST) is computed **at resolution time** by comparing `event_time` against the current clock, not at prompt creation time.
 
-### Problem
-Phase 1.5 was hardcoded to FotMob only (`_try_fotmob_direct_extraction`). Adding new data sources required modifying the strict agent directly. The "Next Steps" from the prior session called for generalizing beyond FotMob.
-
-### Solution
-Introduced a `SiteExtractor` ABC and a registry pattern:
-
-1. **`agents/collector/extractors/base.py`** — `SiteExtractor` ABC with `can_handle(url)`, `extract_and_summarize(url, http_client)`, and `source_id` property. Plus `ExtractionError` exception.
-
-2. **`agents/collector/extractors/__init__.py`** — Registry with `find_extractor(url)` that loops through registered extractors and returns the first match, or `None`.
-
-3. **`agents/collector/extractors/fotmob_ext.py`** — `FotMobExtractor` wrapping existing `fotmob.py` (`fetch_match_stats` + `summarize_for_llm`). Returns `(summary_text, metadata_dict)`.
-
-4. **`agents/collector/source_pinned_agent.py`** — Replaced `_try_fotmob_direct_extraction` with `_try_direct_extraction` that uses `find_extractor()` dispatch. Removed direct fotmob imports.
-
-### Architecture
+## Architecture
 
 ```
-agents/collector/extractors/
-├── __init__.py          # Registry: find_extractor(url) -> SiteExtractor | None
-├── base.py              # SiteExtractor ABC, ExtractionError
-└── fotmob_ext.py        # FotMobExtractor (wraps fotmob.py)
+/step/prompt (LLM detects temporal signals)
+    → prompt_spec.extra["temporal_constraint"] = {
+        "enabled": true,
+        "event_time": "2026-09-23T00:00:00Z",
+        "reason": "Match scheduled for Sep 23 2026"
+      }
+      (NO status field — PE only detects relevance + event_time)
+
+/step/audit or /step/judge (receives temporal_constraint)
+    → ctx.extra["temporal_context"] = temporal_constraint
+    → _resolve_temporal_status(event_time, ctx.now()) computes FUTURE/ACTIVE/PAST
+    → Injects "## TEMPORAL ADVISORY" into LLM messages
+    → FUTURE → forces INVALID; ACTIVE → INVALID unless concluded; PAST → normal
 ```
 
-**Note on FBRef:** `FBRefExtractor` was removed because it was a thin Gemini UrlContext wrapper — functionally identical to Phase 2. Cloudflare-guarded sites like FBRef are now handled by Phase 2 with domain-specific prompt hints (`_DOMAIN_PROMPT_HINTS` in `source_pinned_agent.py`). The extractor registry is reserved for structured HTTP extraction (like FotMob's `__NEXT_DATA__` JSON).
+## Status computation logic (`_resolve_temporal_status`)
 
-The registry is a simple list of `SiteExtractor` instances. `find_extractor(url)` iterates and returns the first extractor whose `can_handle(url)` returns `True`.
+Located in both `agents/auditor/llm_reasoner.py` and `agents/judge/agent.py`:
 
-### How to Add a New Extractor
+```python
+event_time > current_time           → FUTURE
+current_time - event_time < 24h     → ACTIVE
+current_time - event_time >= 24h    → PAST
+parse failure                       → UNKNOWN
+```
 
-1. Create `agents/collector/extractors/mysite_ext.py`:
-   ```python
-   from .base import SiteExtractor, ExtractionError
+## Files changed
 
-   class MySiteExtractor(SiteExtractor):
-       source_id = "mysite"
+| File | What changed |
+|------|-------------|
+| `agents/prompt_engineer/prompts.py` | LLM schema includes optional `temporal_constraint: { enabled, event_time, reason }` |
+| `agents/prompt_engineer/llm_compiler.py` | Passes `temporal_constraint` into `prompt_spec.extra` when present |
+| `api/routes/steps.py` | `AuditRequest` and `JudgeRequest` have new optional `temporal_constraint` field; handlers wire into `ctx.extra["temporal_context"]` |
+| `agents/auditor/prompts.py` | System prompt has "CRITICAL — Temporal Reasoning" section |
+| `agents/auditor/llm_reasoner.py` | `_resolve_temporal_status()` helper + `_build_temporal_context_prompt(ctx, now)` method; injected after quality context |
+| `agents/judge/prompts.py` | "Temporal Validity Check" subsection under Decision Guidelines |
+| `agents/judge/agent.py` | Same `_resolve_temporal_status()` helper + `_build_temporal_context_prompt(ctx, now)` |
+| `orchestrator/pipeline.py` | `_step_audit` and `_step_judge` extract `temporal_constraint` from `prompt_spec.extra` → inject into `ctx.extra["temporal_context"]` |
+| `benchmarks/run_false_negative_benchmark.py` | Extracts `temporal_constraint` from `prompt_spec["extra"]` after prompt step, passes to audit/judge payloads |
+| `tests/unit/test_temporal_context_injection.py` | 21 tests: `_resolve_temporal_status`, prompt builders, injection presence/absence/ordering, e2e judge run |
 
-       def can_handle(self, url: str) -> bool:
-           return "mysite.com/" in url
+## Test status
 
-       def extract_and_summarize(self, url, http_client):
-           # Fetch data, build text summary
-           summary = "..."
-           metadata = {"source_url": url, ...}
-           return summary, metadata
-   ```
+```
+123 passed, 18 skipped, 0 failures (tests/unit/)
+```
 
-2. Register in `agents/collector/extractors/__init__.py`:
-   ```python
-   from .mysite_ext import MySiteExtractor
-   _REGISTRY.append(MySiteExtractor())
-   ```
+## How temporal_constraint flows through the system
 
-3. Add tests in `tests/test_mysite_extractor.py`.
+### Path 1: Full pipeline (`orchestrator/pipeline.py`)
+`prompt_spec.extra["temporal_constraint"]` → `_step_audit`/`_step_judge` read it → inject into `ctx.extra["temporal_context"]` → auditor/judge `_build_temporal_context_prompt(temporal_ctx, ctx.now())`
 
-### Files Changed
-- **New:** `agents/collector/extractors/` — package with `base.py`, `__init__.py`, `fotmob_ext.py`
-- **Modified:** `agents/collector/source_pinned_agent.py` — replaced `_try_fotmob_direct_extraction` → `_try_direct_extraction`; imports changed from `fotmob` to `extractors`
-- **Modified:** `tests/test_collector_source_pinned.py` — updated `TestFotMobDirectExtraction` to mock `find_extractor`; added `TestGenericDirectExtraction` (4 tests)
-- **New:** `tests/test_extractor_registry.py` — tests for registry + FotMobExtractor
+### Path 2: Step-by-step API (`api/routes/steps.py`)
+Frontend calls `/step/prompt` → response includes `prompt_spec.extra.temporal_constraint` → frontend passes it back as `temporal_constraint` field in `/step/audit` and `/step/judge` request bodies → handler injects into `ctx.extra["temporal_context"]`
 
-## Key Findings (carried forward)
+### Path 3: Benchmark runner (`benchmarks/run_false_negative_benchmark.py`)
+After `/step/prompt`, extracts `prompt_spec["extra"]["temporal_constraint"]` → passes as `temporal_constraint` in audit/judge payloads.
 
-### `__NEXT_DATA__` Solves JS-Rendering Problem
-FotMob is a Next.js app. The HTML page embeds ALL match data (496KB JSON) in a `<script id="__NEXT_DATA__">` tag. A plain HTTP GET with browser headers returns this data — no Cloudflare challenge, no JS rendering needed.
+## What needs to happen next: Benchmarking
 
-**Important:** The `Accept-Encoding` header must NOT include `br` (brotli) when using the `requests` library without the brotli package installed.
-
-### FotMob Two-Leg Match Pages
-For Champions League knockout ties, FotMob uses a **single URL** for both legs. The SSR `__NEXT_DATA__` always contains the **second leg** data. First-leg markets fall through to Phase 2 Gemini.
-
-## How to Run a Market (step-by-step via API)
-
+### 1. Run existing false-negative benchmark
+The benchmark runner already wires `temporal_constraint` through. Start the server and run it:
 ```bash
-# 1. Start the API server
 uvicorn api.app:app --reload --host 0.0.0.0 --port 8000
+python benchmarks/run_false_negative_benchmark.py
+```
 
-# 2. Prompt — compile the market query
+### 2. Create a temporal-specific benchmark
+Create `benchmarks/benchmarks_temporal.json` with events that have clear future/past dates:
+- **Future events** that should return INVALID (e.g. "Will Team X win the 2027 World Cup final?")
+- **Past events** that should still resolve YES/NO normally
+- **Active/recent events** to test the 24h window
+
+### 3. Manual spot-checks
+```bash
+# Call /step/prompt with a future event
 curl -s -X POST http://localhost:8000/step/prompt \
   -H "Content-Type: application/json" \
-  -d '{
-    "user_input": "Will Arsenal score from a corner against Brentford on Feb 12?\n\nThis market will resolve to YES if Arsenal scores at least one goal officially designated as originating from a corner kick situation in their Premier League match against Brentford scheduled for February 12, 2026, 20:00 UTC. Otherwise, this market will resolve to NO.\n\nThe goal must be recorded in Fotmob'\''s shot map data with the situation labeled as from corner and the result as goal.",
-    "strict_mode": true
-  }' -o prompt_out.json
+  -d '{"user_input": "Will Arsenal win the Champions League final on May 31 2027?"}' \
+  -o prompt_out.json
 
-# 3. Collect
-curl -s -X POST http://localhost:8000/step/collect \
-  -H "Content-Type: application/json" \
-  -d "$(python3 -c "
-import json
-r = json.load(open('prompt_out.json'))
-print(json.dumps({
-    'prompt_spec': r['prompt_spec'],
-    'tool_plan': r['tool_plan'],
-    'collectors': ['CollectorSitePinned'],
-    'include_raw_content': False
-}))
-")" -o collect_out.json
+# Verify prompt_spec.extra.temporal_constraint exists in output
+python3 -c "import json; r=json.load(open('prompt_out.json')); print(json.dumps(r['prompt_spec']['extra'].get('temporal_constraint'), indent=2))"
 
-# 4. Check collect output
-python3 -c "
-import json
-r = json.load(open('collect_out.json'))
-for bundle in r.get('evidence_bundles', []):
-    for item in bundle.get('items', []):
-        ef = item.get('extracted_fields', {})
-        print(f'outcome: {ef.get(\"outcome\")}')
-        print(f'direct_extraction: {ef.get(\"direct_extraction\")}')
-        print(f'resolution_method: {ef.get(\"resolution_method\")}')
-        print(f'extractor_source_id: {ef.get(\"extractor_source_id\")}')
-        print(f'confidence: {ef.get(\"confidence_score\")}')
-"
-
-# 5. Audit → Judge → Bundle (same pattern as before)
-curl -s -X POST http://localhost:8000/step/audit \
-  -H "Content-Type: application/json" \
-  -d "$(python3 -c "
-import json
-prompt = json.load(open('prompt_out.json'))
-collect = json.load(open('collect_out.json'))
-print(json.dumps({
-    'prompt_spec': prompt['prompt_spec'],
-    'evidence_bundles': collect['evidence_bundles']
-}))
-")" -o audit_out.json
-
-curl -s -X POST http://localhost:8000/step/judge \
-  -H "Content-Type: application/json" \
-  -d "$(python3 -c "
-import json
-prompt = json.load(open('prompt_out.json'))
-collect = json.load(open('collect_out.json'))
-audit = json.load(open('audit_out.json'))
-print(json.dumps({
-    'prompt_spec': prompt['prompt_spec'],
-    'evidence_bundles': collect['evidence_bundles'],
-    'reasoning_trace': audit['reasoning_trace']
-}))
-")" -o judge_out.json
-
-curl -s -X POST http://localhost:8000/step/bundle \
-  -H "Content-Type: application/json" \
-  -d "$(python3 -c "
-import json
-prompt = json.load(open('prompt_out.json'))
-collect = json.load(open('collect_out.json'))
-audit = json.load(open('audit_out.json'))
-judge = json.load(open('judge_out.json'))
-print(json.dumps({
-    'prompt_spec': prompt['prompt_spec'],
-    'evidence_bundles': collect['evidence_bundles'],
-    'reasoning_trace': audit['reasoning_trace'],
-    'verdict': judge['verdict']
-}))
-")" -o bundle_out.json
+# Then run collect → audit → judge and verify INVALID outcome
 ```
 
-## Key Requirements for Phase 1.5 to Activate
+### 4. Key things to verify
+- Future event → `temporal_constraint.enabled=true` in prompt_spec → audit/judge compute FUTURE → outcome=INVALID
+- Past event → either no `temporal_constraint` or status=PAST → normal YES/NO resolution
+- No `temporal_constraint` at all → completely unchanged behavior (backwards compatible)
 
-1. A discovered URL matches a registered `SiteExtractor` via `find_extractor(url)`
-2. The extractor's `extract_and_summarize()` succeeds (no `ExtractionError`)
-3. Gemini LLM call succeeds and returns valid `{"outcome": "Yes/No", "reason": "..."}`
-
-If any step fails, Phase 1.5 returns `None` and the collector falls through to Phase 2 Gemini.
-
-## Remaining Issues
-1. **Two-leg matches** — FotMob only serves second-leg data via SSR `__NEXT_DATA__`. First-leg markets cannot use Phase 1.5.
-
-## Next Steps
-- **Add more extractors** — the registry pattern makes it straightforward to add extractors for other domains (e.g. Transfermarkt, ESPN, CoinGecko for non-football markets).
-- **Add more domain hints** — add `_DOMAIN_PROMPT_HINTS` entries for other Cloudflare-guarded or JS-heavy sites to improve Phase 2 extraction quality.
+## Key design decisions
+- **No new Pydantic models** — `temporal_constraint` is a plain dict in `extra`
+- **Soft advisory only** — LLM is instructed to return INVALID for FUTURE, not a hard code-level block
+- **Backwards compatible** — absent `temporal_constraint` changes nothing
+- **Status computed at resolution time** — prompt engineer provides `event_time`, auditor/judge compute FUTURE/ACTIVE/PAST against `ctx.now()`
+- **24h ACTIVE window** — events within 24h of `event_time` are "ACTIVE" (may still be in progress)
