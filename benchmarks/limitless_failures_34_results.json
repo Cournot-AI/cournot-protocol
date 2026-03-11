@@ -1,0 +1,882 @@
+{
+  "benchmark": "limitless_failures_34",
+  "timestamp": "2026-03-11T06:48:07Z",
+  "config": {
+    "max_workers": 5,
+    "max_quality_retries": 2,
+    "collector_selection": "dynamic (sitepinned for URLs, opensearch for deferred)"
+  },
+  "summary": {
+    "total": 34,
+    "matches": 5,
+    "mismatches": 1,
+    "invalids": 28,
+    "errors": 0,
+    "was_mismatch_now_match": 2,
+    "was_mismatch_now_invalid": 17,
+    "was_invalid_now_match": 3,
+    "still_mismatch": 1,
+    "still_invalid": 11,
+    "regressions": 0,
+    "elapsed_seconds": 591.9983608722687
+  },
+  "original_benchmark_summary": {
+    "total": 34,
+    "mismatches": 20,
+    "invalids": 14
+  },
+  "results": [
+    {
+      "event_id": "will-opinions-daily-transactions-on-mar-6-be-lower-than-mar-5-1772675457887",
+      "title": "Will Opinion's Daily Transactions on Mar 6 be lower than Mar 5?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "btc-vs-gold-1772456624701",
+      "title": "BTC vs Gold",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-opinions-daily-unique-users-drop-on-mar-6-vs-mar-5-1772675447376",
+      "title": "Will Opinion's Daily Unique Users drop on Mar 6 vs Mar 5?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.5,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "eth-vs-silver-1772456613722",
+      "title": "ETH vs Silver",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-opinions-daily-trading-volume-decrease-on-mar-6-vs-mar-5-1772675449496",
+      "title": "Will Opinion's daily trading volume decrease on Mar 6 vs Mar 5?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-opinions-daily-unique-users-drop-on-mar-5-vs-mar-4-1772675436435",
+      "title": "Will Opinion's Daily Unique Users drop on Mar 5 vs Mar 4?",
+      "ground_truth": "No",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-opinions-daily-trading-volume-decrease-on-mar-5-vs-mar-4-1772675439409",
+      "title": "Will Opinion's daily trading volume decrease on Mar 5 vs Mar 4?",
+      "ground_truth": "No",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-ethkrw-be-above-2877000-on-march-6-2000-kst-1772191181877",
+      "title": "Will ETH/KRW be above 2,877,000 on March 6, 20:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-btckrw-be-above-96708000-on-march-6-2000-kst-1772191187903",
+      "title": "Will BTC/KRW be above 96,708,000 on March 6, 20:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-usdtkrw-be-above-14510-on-march-6-2000-kst-1772191193930",
+      "title": "Will USDT/KRW be above 1,451.0 on March 6, 20:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.5,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-solkrw-be-above-1216000-on-march-6-2100-kst-1772194374502",
+      "title": "Will SOL/KRW be above 121,600.0 on March 6, 21:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-casemiro-record-6-or-more-ground-duels-vs-newcastle-on-march-4-1772482051486",
+      "title": "Will Casemiro record 6 or more ground duels vs Newcastle on March 4?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-mainoo-have-6-passes-into-final-third-vs-newcastle-on-march-4-1772482046105",
+      "title": "Will Mainoo have 6+ passes into final third vs Newcastle on March 4?",
+      "ground_truth": "No",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-opinions-daily-unique-users-drop-on-mar-4-vs-mar-3-1772575564714",
+      "title": "Will Opinion's Daily Unique Users drop on Mar 4 vs Mar 3?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.5,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-opinions-daily-trading-volume-decrease-on-mar-4-vs-mar-3-1772575556256",
+      "title": "Will Opinion's daily trading volume decrease on Mar 4 vs Mar 3?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-opinions-daily-transactions-on-mar-4-be-lower-than-mar-3-1772575559497",
+      "title": "Will Opinion's Daily Transactions on Mar 4 be lower than Mar 3?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-xrpkrw-be-above-20110-on-march-6-2100-kst-1772194384488",
+      "title": "Will XRP/KRW be above 2,011.0 on March 6, 21:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-silva-hit-90percent-or-more-pass-accuracy-vs-forest-on-march-4-1772528038922",
+      "title": "Will Silva hit 90% or more pass accuracy vs Forest on March 4?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-rodri-complete-100-accurate-passes-vs-leeds-on-feb-28-1772120429069",
+      "title": "Will Rodri complete 100+ accurate passes vs Leeds on Feb 28?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "YES",
+      "ai_confidence": 0.95,
+      "match": true,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned",
+        "CollectorOpenSearch",
+        "CollectorOpenSearch"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "YES"
+    },
+    {
+      "event_id": "will-magalhaes-win-90percent-ground-duels-vs-chelsea-on-march-1-1772121265669",
+      "title": "Will Magalh\u00e3es win 90%+ ground duels vs Chelsea on March 1?",
+      "ground_truth": "No",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "NO",
+      "ai_confidence": 0.95,
+      "match": true,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "NO"
+    },
+    {
+      "event_id": "will-vinicius-junior-be-fouled-5-or-more-times-vs-getafe-on-march-2-1772122057668",
+      "title": "Will Vinicius J\u00fanior be fouled 5 or more times vs Getafe on March 2?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-virgil-van-dijk-complete-1-or-more-tackles-vs-west-ham-on-feb-28-1772120715946",
+      "title": "Will Virgil van Dijk complete 1 or more tackles vs West Ham on Feb 28?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "altura-to-launch-a-token-by-february-28-1767885000416",
+      "title": "Altura to launch a token by February 28?",
+      "ground_truth": "No",
+      "original_match_result": "mismatch",
+      "original_ai_result": "YES",
+      "ai_outcome": "YES",
+      "ai_confidence": 0.9,
+      "match": false,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorOpenSearch",
+        "CollectorOpenSearch"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "YES"
+    },
+    {
+      "event_id": "will-salah-create-1-or-more-chances-vs-west-ham-on-feb-28-1772120721820",
+      "title": "Will Salah create 1 or more chances vs West Ham on Feb 28?",
+      "ground_truth": "No",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-solkrw-be-above-1232000-on-feb-27-2100-kst-1771589705913",
+      "title": "Will SOL/KRW be above 123,200.0 on Feb 27, 21:00 KST?",
+      "ground_truth": "No",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "NO",
+      "ai_confidence": 0.85,
+      "match": true,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "NO"
+    },
+    {
+      "event_id": "pizza-vs-burger-1771342288482",
+      "title": "Pizza vs Burger    ",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-real-madrid-make-5-shots-outside-box-vs-osasuna-on-feb-21-1771439601836",
+      "title": "Will Real Madrid make 5+ shots outside box vs Osasuna on Feb 21?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "YES",
+      "ai_confidence": 0.95,
+      "match": true,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "YES"
+    },
+    {
+      "event_id": "will-jonathan-david-start-in-xi-against-galatasaray-on-feb-25-1771862724248",
+      "title": "Will Jonathan David start in XI against Galatasaray on Feb 25?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "YES",
+      "ai_confidence": 0.95,
+      "match": true,
+      "was_invalid": false,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "YES"
+    },
+    {
+      "event_id": "crushed-stone-vs-gravel-1771342298632",
+      "title": "Crushed Stone vs Gravel    ",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.2,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-usdtkrw-be-above-14670-on-feb-20-2000-kst-1770983428605",
+      "title": "Will USDT/KRW be above 1,467.0 on Feb 20, 20:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.85,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 0,
+      "preliminary_outcome": "UNCERTAIN"
+    },
+    {
+      "event_id": "will-dogekrw-be-above-1390-on-feb-20-2100-kst-1770985268876",
+      "title": "Will DOGE/KRW be above 139.0 on Feb 20, 21:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-xrpkrw-be-above-20080-on-feb-20-2100-kst-1770985277372",
+      "title": "Will XRP/KRW be above 2,008.0 on Feb 20, 21:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "invalid",
+      "original_ai_result": "INVALID",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-ethkrw-be-above-2874000-on-feb-20-2000-kst-1770983425005",
+      "title": "Will ETH/KRW be above 2,874,000 on Feb 20, 20:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    },
+    {
+      "event_id": "will-btckrw-be-above-98220000-on-feb-20-2000-kst-1770983426785",
+      "title": "Will BTC/KRW be above 98,220,000 on Feb 20, 20:00 KST?",
+      "ground_truth": "Yes",
+      "original_match_result": "mismatch",
+      "original_ai_result": "NO",
+      "ai_outcome": "INVALID",
+      "ai_confidence": 0.3,
+      "match": false,
+      "was_invalid": true,
+      "error": null,
+      "steps_completed": [
+        "prompt",
+        "collect",
+        "quality_check",
+        "audit",
+        "judge"
+      ],
+      "collectors_used": [
+        "CollectorSitePinned",
+        "CollectorSitePinned"
+      ],
+      "quality_retries": 1,
+      "preliminary_outcome": "INVALID"
+    }
+  ]
+}

@@ -629,8 +629,8 @@ class TestCollectorSitePinned:
         item = result.output[0].items[0]
         assert item.extracted_fields["confidence_score"] == 0.9
 
-    def test_non_required_sources_marked_tier3(self):
-        """Non-required-domain sources should get credibility_tier 3 (not authoritative)."""
+    def test_non_required_sources_marked_tier2(self):
+        """Non-required-domain sources should get credibility_tier 2 (reputable but not authoritative)."""
         miss_resp = _mock_response(
             source_uri="https://flashscore.com/match/123",
             source_title="Flashscore",
@@ -647,11 +647,11 @@ class TestCollectorSitePinned:
         item = result.output[0].items[0]
         sources = item.extracted_fields["evidence_sources"]
         assert len(sources) == 1
-        assert sources[0]["credibility_tier"] == 3  # non-authoritative
+        assert sources[0]["credibility_tier"] == 2  # reputable, not authoritative
         assert sources[0]["is_required_data_source"] is False
 
     def test_api_error_returns_failure(self):
-        """API error should return failure evidence."""
+        """API error should return Unresolved with error details."""
         agent = CollectorSitePinned()
         with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
              patch.object(agent, "_get_client", return_value=MagicMock()), \
@@ -661,8 +661,11 @@ class TestCollectorSitePinned:
             result = agent.run(ctx, _create_spec_with_sources(), _create_tool_plan())
 
         bundle, exec_log = result.output
-        assert not bundle.items[0].success
-        assert "API down" in bundle.items[0].error
+        item = bundle.items[0]
+        assert item.success  # Unresolved is a valid response
+        assert item.extracted_fields["outcome"] == "Unresolved"
+        assert item.extracted_fields["resolution_status"] == "UNRESOLVED"
+        assert "API down" in item.extracted_fields["reason"]
 
     def test_no_api_key_returns_failure(self):
         """Missing API key should fail."""
@@ -1256,3 +1259,207 @@ class TestGenericDirectExtraction:
         assert result.success
         item = result.output[0].items[0]
         assert item.extracted_fields.get("direct_extraction") is not True
+
+
+# ---------------------------------------------------------------------------
+# Tests: Jina Reader fallback (Phase 1.75)
+# ---------------------------------------------------------------------------
+
+class TestJinaReaderFallback:
+    """Test the Jina Reader fallback when direct extraction fails."""
+
+    def test_jina_fallback_resolves_market(self):
+        """When extractor fails but Jina Reader returns content, should resolve via LLM."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/arsenal-vs-tottenham/abc123",
+             "title": "Match", "snippet": "..."},
+        ]
+
+        agent = CollectorSitePinned()
+        mock_client = MagicMock()
+
+        # Jina fallback LLM call — returns Yes
+        mock_client.models.generate_content.return_value = _mock_llm_response(
+            outcome="Yes", reason="5 corners found via Jina Reader content."
+        )
+
+        # Mock Jina HTTP response
+        jina_resp = MagicMock()
+        jina_resp.status_code = 200
+        jina_resp.text = (
+            "# Arsenal vs Tottenham\n\n"
+            "## Match Stats\n\n"
+            "| Stat | Arsenal | Tottenham |\n"
+            "| Corners | 7 | 3 |\n"
+            "| Shots | 15 | 8 |\n"
+        )
+
+        mock_ext = _mock_fotmob_extractor(error="Cloudflare block")
+
+        def http_get(url, **kwargs):
+            if "r.jina.ai" in url:
+                return jina_resp
+            return MagicMock(status_code=403, text="Cloudflare")
+
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.source_pinned_agent.find_extractor",
+                   return_value=mock_ext):
+            ctx = AgentContext.create_minimal()
+            ctx.http = MagicMock()
+            ctx.http.get = MagicMock(side_effect=http_get)
+            result = agent.run(ctx, _create_spec_with_sources(), _create_tool_plan())
+
+        assert result.success
+        item = result.output[0].items[0]
+        assert item.parsed_value == "Yes"
+        assert item.extracted_fields.get("direct_extraction") is True
+        assert item.extracted_fields.get("resolution_method") == "llm_with_jina_reader"
+        assert item.provenance.source_id == "jina_reader"
+        assert item.extracted_fields.get("confidence_score") == 0.85
+
+    def test_jina_fallback_skips_cloudflare_content(self):
+        """If Jina Reader returns Cloudflare challenge HTML, should skip it."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/abc123",
+             "title": "Match", "snippet": "..."},
+        ]
+
+        agent = CollectorSitePinned()
+
+        jina_resp = MagicMock()
+        jina_resp.status_code = 200
+        jina_resp.text = "Just a moment... Checking if the site connection is secure"
+
+        ctx = AgentContext.create_minimal()
+        ctx.http = MagicMock()
+        ctx.http.get.return_value = jina_resp
+        mock_client = MagicMock()
+
+        result = agent._try_jina_fallback(
+            ctx, mock_client, _create_spec_with_sources(),
+            _create_spec_with_sources().data_requirements[0],
+            discovered,
+        )
+
+        assert result is None
+
+    def test_jina_fallback_skips_too_short_content(self):
+        """If Jina Reader returns very short content, should skip it."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/abc123",
+             "title": "Match", "snippet": "..."},
+        ]
+
+        agent = CollectorSitePinned()
+
+        jina_resp = MagicMock()
+        jina_resp.status_code = 200
+        jina_resp.text = "Error"
+
+        ctx = AgentContext.create_minimal()
+        ctx.http = MagicMock()
+        ctx.http.get.return_value = jina_resp
+        mock_client = MagicMock()
+
+        result = agent._try_jina_fallback(
+            ctx, mock_client, _create_spec_with_sources(),
+            _create_spec_with_sources().data_requirements[0],
+            discovered,
+        )
+
+        assert result is None
+
+    def test_jina_fallback_skips_on_http_error(self):
+        """If Jina Reader returns HTTP error, should skip."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/abc123",
+             "title": "Match", "snippet": "..."},
+        ]
+
+        agent = CollectorSitePinned()
+
+        jina_resp = MagicMock()
+        jina_resp.status_code = 502
+        jina_resp.text = "Bad Gateway"
+
+        ctx = AgentContext.create_minimal()
+        ctx.http = MagicMock()
+        ctx.http.get.return_value = jina_resp
+        mock_client = MagicMock()
+
+        result = agent._try_jina_fallback(
+            ctx, mock_client, _create_spec_with_sources(),
+            _create_spec_with_sources().data_requirements[0],
+            discovered,
+        )
+
+        assert result is None
+
+    def test_jina_fallback_returns_none_without_urls(self):
+        """No discovered URLs → None."""
+        agent = CollectorSitePinned()
+        ctx = AgentContext.create_minimal()
+        ctx.http = MagicMock()
+
+        result = agent._try_jina_fallback(
+            ctx, MagicMock(), _create_spec_with_sources(),
+            _create_spec_with_sources().data_requirements[0],
+            [],
+        )
+
+        assert result is None
+
+    def test_jina_fallback_returns_none_without_http(self):
+        """No HTTP client → None."""
+        agent = CollectorSitePinned()
+        ctx = AgentContext.create_minimal()
+        ctx.http = None
+
+        result = agent._try_jina_fallback(
+            ctx, MagicMock(), _create_spec_with_sources(),
+            _create_spec_with_sources().data_requirements[0],
+            [{"url": "https://example.com", "title": "test", "snippet": ""}],
+        )
+
+        assert result is None
+
+    def test_jina_falls_through_to_phase2_when_unresolved(self):
+        """Jina LLM returns Unresolved → should fall through to Phase 2."""
+        discovered = [
+            {"url": "https://www.fotmob.com/matches/abc123",
+             "title": "Match", "snippet": "..."},
+        ]
+        gemini_resp = _mock_response(
+            outcome="Yes", reason="5 corners found",
+            source_uri="https://www.fotmob.com/matches/abc123",
+        )
+
+        agent = CollectorSitePinned()
+        mock_client = MagicMock()
+
+        # Jina fallback LLM → Unresolved
+        mock_client.models.generate_content.return_value = _mock_llm_response(
+            outcome="Unresolved", reason="Not enough data"
+        )
+
+        jina_resp = MagicMock()
+        jina_resp.status_code = 200
+        jina_resp.text = "# Some page content\n" * 10  # > 50 chars
+
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "fake-key"}), \
+             patch.object(agent, "_get_client", return_value=mock_client), \
+             patch.object(agent, "_serper_discover_urls", return_value=discovered), \
+             patch("agents.collector.source_pinned_agent.find_extractor",
+                   return_value=None), \
+             patch.object(agent, "_call_gemini_strict", return_value=gemini_resp):
+            ctx = AgentContext.create_minimal()
+            ctx.http = MagicMock()
+            ctx.http.get.return_value = jina_resp
+            result = agent.run(ctx, _create_spec_with_sources(), _create_tool_plan())
+
+        assert result.success
+        item = result.output[0].items[0]
+        # Should have fallen through to Phase 2
+        assert item.extracted_fields.get("resolution_method") != "llm_with_jina_reader"

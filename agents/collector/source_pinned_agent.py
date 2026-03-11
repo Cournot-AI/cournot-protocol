@@ -3,13 +3,19 @@ Site-Pinned Collector Agent (CollectorSitePinned).
 
 Searches ONLY within data-source domains specified in the requirement's
 source_targets.  Uses Serper for URL discovery, structured extractors
-for direct data extraction, and Gemini UrlContext + GoogleSearch as
-fallback.  Retries up to 3 times.  Requires GOOGLE_API_KEY.
+for direct data extraction, Jina Reader as a fallback for
+Cloudflare/JS-blocked pages, and Gemini UrlContext + GoogleSearch as
+final fallback.  Retries up to 3 times.  Requires GOOGLE_API_KEY.
 
-Uses a two-phase approach:
+Uses a multi-phase approach:
 1. **Serper discovery** — find actual page URLs on the required domain
    via the Serper API (google.serper.dev).  This reliably surfaces
    JS-heavy sites (e.g. Fotmob) that Gemini's built-in grounding misses.
+1.5. **Direct extraction** — use registered site extractors to parse
+   structured data from the discovered URLs.
+1.75. **Jina Reader fallback** — if direct extraction fails, try
+   fetching the page via ``r.jina.ai`` which renders JS and bypasses
+   Cloudflare, returning clean markdown for LLM consumption.
 2. **Gemini UrlContext + GoogleSearch** — pass the discovered URLs to
    Gemini via the ``UrlContext`` tool so it can ingest the full page
    content, alongside ``GoogleSearch`` for supplementary evidence.
@@ -63,6 +69,17 @@ if TYPE_CHECKING:
 
 _SERPER_URL = "https://google.serper.dev/search"
 _SERPER_MAX_URLS = 3  # top N Serper results to pass to UrlContext
+_JINA_READER_PREFIX = "https://r.jina.ai/"
+_JINA_TIMEOUT = 35.0  # slightly longer than direct fetch
+
+# Cloudflare challenge markers — shared with api/routes/validate.py
+_CLOUDFLARE_MARKERS = [
+    "cf-browser-verification",
+    "cf_chl_opt",
+    "challenges.cloudflare.com",
+    "Just a moment...",
+    "Verify you are human",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -254,9 +271,10 @@ class CollectorSitePinned(CollectorOpenSearch):
 
     Searches ONLY within data-source domains specified in the
     requirement's ``source_targets``.  Uses Serper for URL discovery,
-    structured extractors for direct data extraction, and Gemini
-    UrlContext + GoogleSearch as fallback.  Retries up to 3 times.
-    Requires GOOGLE_API_KEY.
+    structured extractors for direct data extraction, Jina Reader
+    fallback for Cloudflare/JS-blocked pages, and Gemini
+    UrlContext + GoogleSearch as final fallback.  Retries up to 3
+    times.  Requires GOOGLE_API_KEY.
     """
 
     _name = "CollectorSitePinned"
@@ -612,6 +630,182 @@ class CollectorSitePinned(CollectorOpenSearch):
         return outcome, reason, metadata
 
     # ------------------------------------------------------------------
+    # Jina Reader fallback (Phase 1.75)
+    # ------------------------------------------------------------------
+
+    def _try_jina_fallback(
+        self,
+        ctx: "AgentContext",
+        client: Any,
+        prompt_spec: PromptSpec,
+        requirement: "DataRequirement",
+        discovered_urls: list[dict[str, str]],
+    ) -> tuple[str, str, dict[str, Any]] | None:
+        """Try fetching page content via Jina Reader and resolve with LLM.
+
+        Called when structured extractors fail (Phase 1.5 miss).  Jina
+        Reader (``r.jina.ai``) renders JS-heavy / Cloudflare-protected
+        pages and returns clean markdown, which is then passed to the
+        LLM for market resolution.
+
+        Returns ``(outcome, reason, metadata)`` on success, or ``None``.
+        """
+        if not ctx.http:
+            return None
+        if not discovered_urls:
+            return None
+
+        import concurrent.futures
+        from google.genai import types
+
+        # Try each discovered URL via Jina until one succeeds
+        jina_content: str | None = None
+        jina_url: str | None = None
+
+        for entry in discovered_urls:
+            url = entry.get("url", "")
+            if not url:
+                continue
+
+            reader_url = f"{_JINA_READER_PREFIX}{url}"
+            ctx.info(f"[SourcePinned] Jina Reader fallback: {reader_url}")
+
+            try:
+                resp = ctx.http.get(
+                    reader_url,
+                    headers={"Accept": "text/markdown"},
+                    timeout=_JINA_TIMEOUT,
+                )
+                if resp.status_code >= 400:
+                    ctx.warning(
+                        f"[SourcePinned] Jina Reader HTTP {resp.status_code} "
+                        f"for {url}"
+                    )
+                    continue
+
+                body = resp.text.strip()
+                if not body or len(body) < 50:
+                    ctx.warning(
+                        f"[SourcePinned] Jina Reader returned too little "
+                        f"content ({len(body)} chars) for {url}"
+                    )
+                    continue
+
+                # Check for Cloudflare markers in Jina output
+                body_lower = body[:4000].lower()
+                is_cf = any(m.lower() in body_lower for m in _CLOUDFLARE_MARKERS)
+                if is_cf:
+                    ctx.warning(
+                        f"[SourcePinned] Jina Reader content still shows "
+                        f"Cloudflare challenge for {url}"
+                    )
+                    continue
+
+                jina_content = body
+                jina_url = url
+                ctx.info(
+                    f"[SourcePinned] Jina Reader fetched {len(body)} chars "
+                    f"from {url}"
+                )
+                break
+
+            except Exception as e:
+                ctx.warning(f"[SourcePinned] Jina Reader error for {url}: {e}")
+                continue
+
+        if jina_content is None or jina_url is None:
+            return None
+
+        # Truncate to avoid exceeding LLM context
+        max_content = 12_000
+        if len(jina_content) > max_content:
+            jina_content = jina_content[:max_content] + "\n\n[... content truncated ...]"
+
+        # Build LLM prompt with Jina-fetched content
+        market = prompt_spec.market
+        semantics = prompt_spec.prediction_semantics
+
+        rules_lines: list[str] = []
+        rules_lines.append(f"Event definition: {market.event_definition}")
+        for rule in market.resolution_rules.get_sorted_rules():
+            rules_lines.append(f"- [{rule.rule_id}] {rule.description}")
+        rules_text = "\n".join(rules_lines)
+
+        llm_prompt = (
+            f"You are resolving a prediction market using data fetched "
+            f"from {jina_url}.\n\n"
+            f"Market question: {market.question}\n\n"
+            f"Resolution rules:\n{rules_text}\n\n"
+            f"Target entity: {semantics.target_entity}\n"
+            f"Predicate: {semantics.predicate}\n"
+            f"Threshold: {semantics.threshold or 'N/A'}\n\n"
+            f"=== PAGE CONTENT (from {jina_url} via Jina Reader) ===\n"
+            f"{jina_content}\n"
+            f"=== END PAGE CONTENT ===\n\n"
+            "Based ONLY on the page content above, resolve this market.\n"
+            "You MUST respond with ONLY a JSON object, no markdown fences:\n"
+            '{"outcome": "Yes or No or Unresolved", "reason": "Brief explanation citing specific data"}\n'
+            "Use 'Unresolved' if the page content does not contain enough information to determine the answer.\n"
+        )
+
+        ctx.info(
+            f"[SourcePinned] Calling LLM with Jina Reader content "
+            f"for {jina_url}"
+        )
+
+        def _do_call() -> Any:
+            return client.models.generate_content(
+                model=self._model,
+                contents=llm_prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                ),
+            )
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_do_call)
+                response = future.result(timeout=30)
+        except Exception as e:
+            ctx.warning(f"[SourcePinned] Jina fallback LLM call failed: {e}")
+            return None
+
+        text = self._extract_text(response)
+        parsed = self._parse_json(text)
+        parsed = self._normalize_parsed(parsed)
+
+        outcome = parsed.get("outcome", "")
+        reason = parsed.get("reason", "")
+
+        if outcome.lower() not in ("yes", "no", "unresolved"):
+            ctx.warning(
+                f"[SourcePinned] Jina fallback LLM returned "
+                f"invalid outcome: {outcome!r}"
+            )
+            return None
+
+        if outcome.lower() == "unresolved":
+            ctx.info(
+                "[SourcePinned] Jina fallback LLM returned Unresolved "
+                "— insufficient data from Jina content"
+            )
+            return None
+
+        metadata = {
+            "direct_extraction": True,
+            "resolution_method": "llm_with_jina_reader",
+            "jina_reader_url": jina_url,
+            "jina_content_length": len(jina_content),
+        }
+
+        ctx.info(
+            f"[SourcePinned] Jina Reader LLM resolution SUCCESS: "
+            f"outcome={outcome}, reason={reason[:100]}"
+        )
+
+        return outcome, reason, metadata
+
+    # ------------------------------------------------------------------
     # Per-requirement collection (override)
     # ------------------------------------------------------------------
 
@@ -728,6 +922,62 @@ class CollectorSitePinned(CollectorOpenSearch):
                     success=True,
                 ), record
 
+            # --- Phase 1.75: Jina Reader fallback ---
+            # If direct extraction failed (no extractor matched, or
+            # extractor raised ExtractionError), try fetching via Jina
+            # Reader which can bypass Cloudflare/JS rendering walls.
+            jina_result = self._try_jina_fallback(
+                ctx, client, prompt_spec, requirement, discovered_urls,
+            )
+            if jina_result is not None:
+                outcome, reason, jina_meta = jina_result
+                jina_url = jina_meta.get("jina_reader_url", "jina_reader")
+                combined_text = json.dumps({"outcome": outcome, "reason": reason})
+                record.ended_at = ctx.now().isoformat()
+                record.output = {
+                    "outcome": outcome,
+                    "method": "jina_reader_fallback",
+                    "data_source_covered": True,
+                    "attempts_made": 0,
+                    "strict_mode": True,
+                    "serper_discovered_urls": [u["url"] for u in discovered_urls],
+                    **jina_meta,
+                }
+
+                return EvidenceItem(
+                    evidence_id=evidence_id,
+                    requirement_id=req_id,
+                    provenance=Provenance(
+                        source_id="jina_reader",
+                        source_uri=jina_url,
+                        tier=1,
+                        fetched_at=ctx.now(),
+                        content_hash=hashlib.sha256(combined_text.encode()).hexdigest(),
+                    ),
+                    raw_content=reason[:500],
+                    parsed_value=outcome,
+                    extracted_fields={
+                        "outcome": outcome,
+                        "reason": reason,
+                        "evidence_sources": [{
+                            "url": jina_url,
+                            "source_id": "jina_reader",
+                            "credibility_tier": 1,
+                            "key_fact": reason,
+                            "supports": outcome,
+                            "is_required_data_source": True,
+                        }],
+                        "confidence_score": 0.85,
+                        "resolution_status": "RESOLVED",
+                        "data_source_covered": True,
+                        "data_source_domains_required": [d["domain"] for d in required_domains],
+                        "strict_mode": True,
+                        "serper_discovered_urls": [u["url"] for u in discovered_urls],
+                        **jina_meta,
+                    },
+                    success=True,
+                ), record
+
             # --- Phase 2: Gemini with UrlContext + GoogleSearch ---
             strict_prompt = _build_strict_prompt(
                 prompt_spec, requirement, required_domains,
@@ -742,6 +992,7 @@ class CollectorSitePinned(CollectorOpenSearch):
             all_search_queries: list[str] = []
             all_url_context_statuses: list[dict[str, str]] = []
             attempts_made = 0
+            last_attempt_error: str | None = None
 
             for attempt in range(1, self._max_attempts + 1):
                 attempts_made = attempt
@@ -751,14 +1002,82 @@ class CollectorSitePinned(CollectorOpenSearch):
                     f"discovered_urls: {len(discovered_urls)})"
                 )
 
-                response = self._call_gemini_strict(
-                    client, strict_prompt,
-                    discovered_urls=discovered_urls or None,
-                )
+                try:
+                    response = self._call_gemini_strict(
+                        client, strict_prompt,
+                        discovered_urls=discovered_urls or None,
+                    )
+                except Exception as call_err:
+                    last_attempt_error = str(call_err)
+                    ctx.warning(
+                        f"[SourcePinned] Attempt {attempt} Gemini call "
+                        f"failed: {call_err}"
+                    )
+                    continue
+
                 text = self._extract_text(response)
                 grounding = self._extract_grounding(response)
                 url_ctx_meta = self._extract_url_context_metadata(response)
-                parsed = self._parse_json(text)
+
+                # If Gemini returned empty text with UrlContext enabled,
+                # retry the same attempt without UrlContext (GoogleSearch
+                # only).  UrlContext + GoogleSearch can produce empty
+                # responses for some queries (known SDK issue).
+                if not text and discovered_urls:
+                    ctx.warning(
+                        f"[SourcePinned] Attempt {attempt} empty with "
+                        f"UrlContext — retrying with GoogleSearch only"
+                    )
+                    try:
+                        response = self._call_gemini_strict(
+                            client, strict_prompt,
+                            discovered_urls=None,
+                        )
+                    except Exception as retry_err:
+                        last_attempt_error = str(retry_err)
+                        ctx.warning(
+                            f"[SourcePinned] Attempt {attempt} GoogleSearch-"
+                            f"only retry also failed: {retry_err}"
+                        )
+                        continue
+                    text = self._extract_text(response)
+                    fallback_grounding = self._extract_grounding(response)
+                    # Merge grounding from fallback call
+                    for key in ("sources", "search_queries", "supports"):
+                        grounding.setdefault(key, []).extend(
+                            fallback_grounding.get(key, [])
+                        )
+
+                # Log diagnostics when Gemini returns no text
+                if not text:
+                    finish_reason = None
+                    candidates = getattr(response, "candidates", None)
+                    if candidates:
+                        finish_reason = getattr(candidates[0], "finish_reason", None)
+                    ctx.warning(
+                        f"[SourcePinned] Attempt {attempt} Gemini returned "
+                        f"empty text (finish_reason={finish_reason}, "
+                        f"grounding_sources={len(grounding.get('sources', []))}, "
+                        f"url_ctx={len(url_ctx_meta)})"
+                    )
+
+                try:
+                    parsed = self._parse_json(text)
+                except Exception as parse_err:
+                    last_attempt_error = str(parse_err)
+                    ctx.warning(
+                        f"[SourcePinned] Attempt {attempt} returned "
+                        f"unparseable response (text length={len(text)})"
+                    )
+                    # Still accumulate grounding metadata from this attempt
+                    all_grounding_sources.extend(grounding.get("sources", []))
+                    all_search_queries.extend(grounding.get("search_queries", []))
+                    all_url_context_statuses.extend(url_ctx_meta)
+                    continue
+
+                # Clear error on successful parse
+                last_attempt_error = None
+
                 parsed = self._normalize_parsed(parsed)
 
                 # Accumulate metadata across attempts
@@ -802,6 +1121,71 @@ class CollectorSitePinned(CollectorOpenSearch):
                     best_parsed = parsed
                     best_grounding = grounding
 
+            # If every attempt failed (no parsed result at all),
+            # return Unresolved with discovered URLs as evidence sources
+            # so downstream consumers can see what was found.
+            if best_parsed is None and last_attempt_error is not None:
+                url_evidence_sources = self._build_discovered_url_sources(
+                    discovered_urls, all_url_context_statuses, required_domains,
+                )
+                record.ended_at = ctx.now().isoformat()
+                record.error = last_attempt_error
+                unresolved_reason = (
+                    f"Identified {len(discovered_urls)} URL(s) on required "
+                    f"domains but could not extract content after "
+                    f"{attempts_made} attempt(s): {last_attempt_error}"
+                )
+                combined_text = json.dumps({
+                    "outcome": "Unresolved", "reason": unresolved_reason,
+                })
+                record.output = {
+                    "outcome": "Unresolved",
+                    "grounding_sources": len(url_evidence_sources),
+                    "data_source_domains_required": [
+                        d["domain"] for d in required_domains
+                    ],
+                    "data_source_covered": False,
+                    "attempts_made": attempts_made,
+                    "strict_mode": True,
+                    "serper_discovered_urls": [u["url"] for u in discovered_urls],
+                    "url_context_statuses": all_url_context_statuses,
+                }
+                return EvidenceItem(
+                    evidence_id=evidence_id,
+                    requirement_id=req_id,
+                    provenance=Provenance(
+                        source_id="source_pinned",
+                        source_uri=f"gemini:{self._model}",
+                        tier=2,
+                        fetched_at=ctx.now(),
+                        content_hash=hashlib.sha256(
+                            combined_text.encode()
+                        ).hexdigest(),
+                    ),
+                    raw_content=unresolved_reason[:500],
+                    parsed_value=None,
+                    extracted_fields={
+                        "outcome": "Unresolved",
+                        "reason": unresolved_reason,
+                        "evidence_sources": url_evidence_sources,
+                        "grounding_source_count": len(url_evidence_sources),
+                        "confidence_score": 0.0,
+                        "resolution_status": "UNRESOLVED",
+                        "data_source_domains_required": [
+                            d["domain"] for d in required_domains
+                        ],
+                        "data_source_covered": False,
+                        "attempts_made": attempts_made,
+                        "strict_mode": True,
+                        "serper_discovered_urls": [
+                            u["url"] for u in discovered_urls
+                        ],
+                        "url_context_statuses": all_url_context_statuses,
+                    },
+                    success=True,
+                    error=None,
+                ), record
+
             # Final result assembly
             final_parsed = best_parsed or {"outcome": "", "reason": "No result"}
             final_grounding = best_grounding or {"sources": [], "search_queries": []}
@@ -831,8 +1215,36 @@ class CollectorSitePinned(CollectorOpenSearch):
                     {"sources": all_grounding_sources}, required_domains,
                 )
 
+            # Append discovered URLs that aren't already in evidence_sources
+            # so the response always shows which URLs were identified,
+            # with their UrlContext fetch status.
+            discovered_url_sources = self._build_discovered_url_sources(
+                discovered_urls, all_url_context_statuses, required_domains,
+                start_index=len(evidence_sources),
+            )
+            existing_urls = {s.get("url", "") for s in evidence_sources}
+            for dus in discovered_url_sources:
+                if dus["url"] not in existing_urls:
+                    evidence_sources.append(dus)
+                    existing_urls.add(dus["url"])
+
             outcome = final_parsed.get("outcome", "")
             reason = final_parsed.get("reason", "")
+
+            # Enrich readable sources with per-source supports via LLM.
+            # Sources marked INVALID (content not readable) are preserved.
+            if ctx.llm and evidence_sources and outcome:
+                invalid_indices = {
+                    i for i, s in enumerate(evidence_sources)
+                    if s.get("supports") == "INVALID"
+                }
+                evidence_sources = self._analyze_sources(
+                    ctx, outcome, reason, evidence_sources,
+                )
+                for i in invalid_indices:
+                    if i < len(evidence_sources):
+                        evidence_sources[i]["supports"] = "INVALID"
+
             combined_text = json.dumps(final_parsed)
             outcome_lower = outcome.lower()
             is_definitive = outcome_lower in ("yes", "no")
@@ -906,6 +1318,30 @@ class CollectorSitePinned(CollectorOpenSearch):
             record.ended_at = ctx.now().isoformat()
             record.error = str(e)
 
+            # Preserve discovered URLs even on failure so downstream
+            # consumers can see what was found before the crash.
+            discovered_raw = record.input.get("discovered_urls", [])
+            # Build evidence_sources from discovered URLs (all marked
+            # as not-readable since we crashed before fetching).
+            crash_url_sources: list[dict[str, Any]] = []
+            for idx, url in enumerate(discovered_raw, 1):
+                host = (urlparse(url).netloc or "").lower().lstrip("www.")
+                crash_url_sources.append({
+                    "url": url,
+                    "source_id": f"[{idx}]",
+                    "domain_name": host or None,
+                    "credibility_tier": 1,
+                    "key_fact": f"URL discovered but content not readable: {e}",
+                    "supports": "INVALID",
+                    "date_published": None,
+                    "is_required_data_source": True,
+                    "url_context_status": "error",
+                })
+            crash_reason = (
+                f"Identified {len(discovered_raw)} URL(s) on required "
+                f"domains but failed to extract content: {e}"
+            )
+
             return EvidenceItem(
                 evidence_id=evidence_id,
                 requirement_id=req_id,
@@ -915,8 +1351,22 @@ class CollectorSitePinned(CollectorOpenSearch):
                     tier=0,
                     fetched_at=ctx.now(),
                 ),
-                success=False,
-                error=f"Gemini grounded strict call failed: {e}",
+                raw_content=crash_reason[:500],
+                extracted_fields={
+                    "outcome": "Unresolved",
+                    "reason": crash_reason,
+                    "evidence_sources": crash_url_sources,
+                    "grounding_source_count": len(crash_url_sources),
+                    "confidence_score": 0.0,
+                    "resolution_status": "UNRESOLVED",
+                    "data_source_domains_required": [
+                        d["domain"] for d in required_domains
+                    ],
+                    "data_source_covered": False,
+                    "serper_discovered_urls": discovered_raw,
+                },
+                success=True,
+                error=None,
             ), record
 
     # ------------------------------------------------------------------
@@ -974,12 +1424,18 @@ class CollectorSitePinned(CollectorOpenSearch):
         This override concatenates all text parts so ``_parse_json`` can
         find the ``{...}`` block regardless of which part it's in.
         """
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            return ""
         texts: list[str] = []
-        for candidate in getattr(response, "candidates", []):
+        for candidate in candidates:
             content = getattr(candidate, "content", None)
             if content is None:
                 continue
-            for part in getattr(content, "parts", []):
+            parts = getattr(content, "parts", None)
+            if not parts:
+                continue
+            for part in parts:
                 text = getattr(part, "text", None)
                 if text:
                     texts.append(text)
@@ -992,12 +1448,18 @@ class CollectorSitePinned(CollectorOpenSearch):
         Returns a list of ``{"url": ..., "status": "success"|"failed"|...}``.
         """
         results: list[dict[str, str]] = []
-        for candidate in getattr(response, "candidates", []):
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            return results
+        for candidate in candidates:
             meta = getattr(candidate, "url_context_metadata", None)
             if meta is None:
                 continue
-            for url_meta in getattr(meta, "url_metadata", []):
-                url = getattr(url_meta, "retrieved_url", "")
+            url_metadata = getattr(meta, "url_metadata", None)
+            if not url_metadata:
+                continue
+            for url_meta in url_metadata:
+                url = getattr(url_meta, "retrieved_url", "") or ""
                 status_enum = getattr(url_meta, "url_retrieval_status", None)
                 status = "unknown"
                 if status_enum is not None:
@@ -1033,8 +1495,17 @@ class CollectorSitePinned(CollectorOpenSearch):
     def _build_strict_evidence_sources(
         grounding: dict[str, Any],
         required_domains: list[dict[str, str]],
+        *,
+        start_index: int = 0,
     ) -> list[dict[str, Any]]:
-        """Build evidence sources, only including required-domain matches."""
+        """Build evidence sources, only including required-domain matches.
+
+        Format is aligned with ``CollectorOpenSearch._build_evidence_sources``:
+        numbered ``source_id`` (``[1]``, ``[2]``, …), ``domain_name``, etc.
+
+        *start_index* offsets the ``[N]`` numbering so sources appended
+        after this batch continue the sequence.
+        """
         req_domain_set = {d["domain"] for d in required_domains}
 
         # Build per-chunk text attribution from grounding_supports
@@ -1046,6 +1517,7 @@ class CollectorSitePinned(CollectorOpenSearch):
 
         evidence_sources: list[dict[str, Any]] = []
         seen_uris: set[str] = set()
+        seq = start_index
         for i, src in enumerate(grounding.get("sources", [])):
             uri = src.get("uri", "")
             if uri in seen_uris:
@@ -1062,13 +1534,83 @@ class CollectorSitePinned(CollectorOpenSearch):
             attributed_texts = chunk_texts.get(i, [])
             key_fact = " ".join(attributed_texts)[:500] if attributed_texts else src.get("title", "")
 
+            seq += 1
             evidence_sources.append({
                 "url": uri,
-                "source_id": src.get("title", "")[:50],
-                "credibility_tier": 1 if is_required else 3,
+                "source_id": f"[{seq}]",
+                "domain_name": src.get("title", "") or host or None,
+                "credibility_tier": 1 if is_required else 2,
                 "key_fact": key_fact,
                 "supports": "N/A",
                 "date_published": None,
                 "is_required_data_source": is_required,
             })
         return evidence_sources
+
+    @staticmethod
+    def _build_discovered_url_sources(
+        discovered_urls: list[dict[str, str]],
+        url_context_statuses: list[dict[str, str]],
+        required_domains: list[dict[str, str]],
+        *,
+        start_index: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Build evidence source entries from Serper-discovered URLs.
+
+        Format is aligned with ``CollectorOpenSearch._build_evidence_sources``.
+        Each discovered URL is included with its UrlContext fetch status.
+        URLs that could not be read have ``supports="N/A"`` and a
+        ``key_fact`` noting the content was not readable.
+
+        *start_index* offsets the ``[N]`` numbering so sources appended
+        after a prior batch continue the sequence.
+        """
+        req_domain_set = {d["domain"] for d in required_domains}
+
+        # Index UrlContext statuses by URL for fast lookup
+        status_by_url: dict[str, str] = {}
+        for ucm in url_context_statuses:
+            url = ucm.get("url", "")
+            if url:
+                status_by_url[url] = ucm.get("status", "unknown")
+
+        sources: list[dict[str, Any]] = []
+        seq = start_index
+        for entry in discovered_urls:
+            url = entry.get("url", "")
+            if not url:
+                continue
+            parsed = urlparse(url)
+            host = (parsed.netloc or "").lower().lstrip("www.")
+            is_required = any(
+                rd in host or host in rd for rd in req_domain_set
+            )
+            ctx_status = status_by_url.get(url, "not_attempted")
+            title = entry.get("title", "") or host
+            snippet = entry.get("snippet", "")
+
+            if ctx_status == "success":
+                key_fact = snippet or title
+                supports = "N/A"  # readable — will be enriched by _analyze_sources
+            else:
+                key_fact = (
+                    snippet
+                    if snippet
+                    else f"URL identified via search but content not readable "
+                         f"(status: {ctx_status})"
+                )
+                supports = "INVALID"  # not readable
+
+            seq += 1
+            sources.append({
+                "url": url,
+                "source_id": f"[{seq}]",
+                "domain_name": host or None,
+                "credibility_tier": 1 if is_required else 2,
+                "key_fact": key_fact,
+                "supports": supports,
+                "date_published": None,
+                "is_required_data_source": is_required,
+                "url_context_status": ctx_status,
+            })
+        return sources

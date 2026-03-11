@@ -22,6 +22,7 @@ import os
 import re
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
+from urllib.parse import urlparse
 
 from agents.base import AgentCapability, AgentResult, AgentStep, BaseAgent
 from agents.registry import register_agent
@@ -1287,24 +1288,19 @@ class CollectorHyDE(BaseAgent):
             # Determine success based on hypothesis match and confidence
             success = hypothesis_match in ("CONFIRMED", "PARTIAL") and confidence_score >= 0.5
 
-            # Map hypothesis_match to standard resolution_status
-            _MATCH_TO_STATUS = {
-                "CONFIRMED": "RESOLVED",
-                "PARTIAL": "AMBIGUOUS",
-                "CONTRADICTED": "AMBIGUOUS",
-                "UNVERIFIED": "UNRESOLVED",
-            }
-            resolution_status = _MATCH_TO_STATUS.get(hypothesis_match, "UNRESOLVED")
-
-            # Normalize evidence_sources to standard format
+            # Normalize evidence_sources to standard format and tag required domains
             raw_sources = data.get("evidence_sources", [])
             evidence_sources = _normalize_evidence_sources(raw_sources)
+            _tag_required_data_sources(evidence_sources, requirement)
+
+            # Normalize outcome to simple Yes/No/Unresolved
+            raw_outcome = str(data.get("parsed_value", "") or "")
+            outcome = _normalize_hyde_outcome(raw_outcome, hypothesis_match)
 
             extracted_fields = {
-                "outcome": data.get("parsed_value"),
+                "outcome": outcome,
                 "reason": data.get("reasoning_trace", ""),
                 "confidence_score": confidence_score,
-                "resolution_status": resolution_status,
                 "evidence_sources": evidence_sources,
                 "hypothesis_match": hypothesis_match,
                 "discrepancies": data.get("discrepancies", []),
@@ -1315,7 +1311,6 @@ class CollectorHyDE(BaseAgent):
             synthesis_record.output = {
                 "hypothesis_match": hypothesis_match,
                 "confidence_score": confidence_score,
-                "resolution_status": resolution_status,
                 "num_evidence_sources": len(evidence_sources),
             }
             execution_log.add_call(synthesis_record)
@@ -3433,6 +3428,63 @@ def _normalize_evidence_sources(raw_sources: list[dict[str, Any]]) -> list[dict[
         })
 
     return normalized
+
+
+def _tag_required_data_sources(
+    evidence_sources: list[dict[str, Any]],
+    requirement: "DataRequirement",
+) -> None:
+    """Tag each evidence source with ``is_required_data_source`` in-place.
+
+    Compares the source URL's domain against the requirement's
+    ``source_targets`` URIs.  Mutates *evidence_sources* directly.
+    """
+    required_domains: set[str] = set()
+    for target in requirement.source_targets:
+        parsed = urlparse(target.uri)
+        domain = (parsed.netloc or parsed.path).lower().lstrip("www.")
+        if domain:
+            required_domains.add(domain)
+
+    for src in evidence_sources:
+        url = src.get("url", "")
+        parsed = urlparse(url)
+        host = (parsed.netloc or "").lower().lstrip("www.")
+        is_required = any(rd in host or host in rd for rd in required_domains)
+        src["is_required_data_source"] = is_required
+
+
+def _normalize_hyde_outcome(raw_outcome: str, hypothesis_match: str) -> str:
+    """Normalize the HyDE parsed_value to a simple Yes/No/Unresolved string.
+
+    The LLM sometimes returns a full sentence instead of a single word.
+    We extract the directional signal or fall back based on hypothesis_match.
+    """
+    if not raw_outcome:
+        if hypothesis_match == "CONFIRMED":
+            return "Yes"
+        if hypothesis_match == "CONTRADICTED":
+            return "No"
+        return "Unresolved"
+
+    lower = raw_outcome.strip().lower()
+
+    # Already concise
+    if lower in ("yes", "no", "unresolved"):
+        return lower.capitalize()
+
+    # Check for leading yes/no signal
+    if lower.startswith("yes"):
+        return "Yes"
+    if lower.startswith("no"):
+        return "No"
+
+    # Fallback: derive from hypothesis_match
+    if hypothesis_match == "CONFIRMED":
+        return "Yes"
+    if hypothesis_match == "CONTRADICTED":
+        return "No"
+    return "Unresolved"
 
 
 def get_collector(

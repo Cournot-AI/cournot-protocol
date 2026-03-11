@@ -62,12 +62,13 @@ For each source, determine:
    - 1 = authoritative primary source (government, official body, major wire service, domain-expert think tank like Brookings/CFR, top-tier newspaper of record like NYT/WSJ/BBC)
    - 2 = reputable mainstream source (well-known news outlet, established media, Wikipedia)
    - 3 = low-confidence source (blog, forum, opinion site, unknown outlet, social media)
+4. date_published: The publication date in "YYYY-MM-DD" format if inferable from the attributed text, URL, or domain context. Use null if unknown.
 
 IMPORTANT: Base key_fact ONLY on the attributed text shown for each source. Do NOT invent or assume facts.
 
 Return JSON:
 {{"sources": [
-    {{"source_id": "[1]", "key_fact": "...", "supports": "YES|NO|N/A", "credibility_tier": 1}},
+    {{"source_id": "[1]", "key_fact": "...", "supports": "YES|NO|N/A", "credibility_tier": 1, "date_published": "YYYY-MM-DD or null"}},
     ...
 ]}}
 """
@@ -437,6 +438,12 @@ class CollectorOpenSearch(BaseAgent):
 
             response = self._call_gemini(client, user_prompt)
             text = self._extract_text(response)
+            if not text:
+                raise ValueError(
+                    "Gemini returned an empty response (no text content). "
+                    "The model may have been blocked by safety filters or "
+                    "returned no candidates."
+                )
             grounding = self._extract_grounding(response)
             parsed = self._parse_json(text)
             parsed = self._normalize_parsed(parsed)
@@ -802,6 +809,9 @@ class CollectorOpenSearch(BaseAgent):
                                 src["credibility_tier"] = tier
                         except (ValueError, TypeError):
                             pass  # keep existing tier
+                    raw_date = a.get("date_published")
+                    if raw_date and raw_date != "null":
+                        src["date_published"] = str(raw_date)
         except Exception:
             # Graceful fallback — keep the title-based values from _build_evidence_sources
             pass
@@ -811,11 +821,17 @@ class CollectorOpenSearch(BaseAgent):
     @staticmethod
     def _extract_text(response: Any) -> str:
         """Extract text content from Gemini response."""
-        for candidate in getattr(response, "candidates", []):
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            return ""
+        for candidate in candidates:
             content = getattr(candidate, "content", None)
             if content is None:
                 continue
-            for part in getattr(content, "parts", []):
+            parts = getattr(content, "parts", None)
+            if not parts:
+                continue
+            for part in parts:
                 text = getattr(part, "text", None)
                 if text:
                     return text
@@ -826,7 +842,11 @@ class CollectorOpenSearch(BaseAgent):
         """Extract grounding metadata (search queries, source URLs, supports) from response."""
         result: dict[str, Any] = {"sources": [], "search_queries": [], "supports": []}
 
-        for candidate in getattr(response, "candidates", []):
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            return result
+
+        for candidate in candidates:
             gm = getattr(candidate, "grounding_metadata", None)
             if gm is None:
                 continue
@@ -834,33 +854,44 @@ class CollectorOpenSearch(BaseAgent):
             # Search queries used by Gemini
             queries = getattr(gm, "web_search_queries", None)
             if queries:
-                result["search_queries"] = list(queries)
+                try:
+                    result["search_queries"] = list(queries)
+                except TypeError:
+                    pass
 
             # Grounding chunks (the web pages Gemini cited)
             chunks = getattr(gm, "grounding_chunks", None)
             if chunks:
-                for chunk in chunks:
-                    web = getattr(chunk, "web", None)
-                    if web:
-                        result["sources"].append({
-                            "uri": getattr(web, "uri", ""),
-                            "title": getattr(web, "title", ""),
-                        })
+                try:
+                    for chunk in chunks:
+                        web = getattr(chunk, "web", None)
+                        if web:
+                            result["sources"].append({
+                                "uri": getattr(web, "uri", "") or "",
+                                "title": getattr(web, "title", "") or "",
+                            })
+                except TypeError:
+                    pass
 
             # Extract grounding_supports (text-to-source mappings)
             supports = getattr(gm, "grounding_supports", None)
             if supports:
-                for sup in supports:
-                    seg = getattr(sup, "segment", None)
-                    text = getattr(seg, "text", None) if seg else None
-                    indices = getattr(sup, "grounding_chunk_indices", None) or []
-                    scores = getattr(sup, "confidence_scores", None) or []
-                    if text:
-                        result["supports"].append({
-                            "text": text,
-                            "chunk_indices": list(indices),
-                            "confidence_scores": list(scores),
-                        })
+                try:
+                    for sup in supports:
+                        seg = getattr(sup, "segment", None)
+                        text = getattr(seg, "text", None) if seg else None
+                        raw_indices = getattr(sup, "grounding_chunk_indices", None)
+                        raw_scores = getattr(sup, "confidence_scores", None)
+                        indices = list(raw_indices) if raw_indices is not None else []
+                        scores = list(raw_scores) if raw_scores is not None else []
+                        if text:
+                            result["supports"].append({
+                                "text": text,
+                                "chunk_indices": indices,
+                                "confidence_scores": scores,
+                            })
+                except TypeError:
+                    pass
 
         return result
 
@@ -868,6 +899,9 @@ class CollectorOpenSearch(BaseAgent):
     def _parse_json(text: str) -> dict[str, Any]:
         """Parse JSON from Gemini response text, handling markdown fences."""
         text = text.strip()
+
+        if not text:
+            raise ValueError("Empty response text — cannot parse JSON")
 
         # Try stripping markdown code block (```json ... ```)
         fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
