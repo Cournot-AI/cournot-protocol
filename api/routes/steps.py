@@ -58,6 +58,12 @@ class PromptEngineerRequest(BaseModel):
         default=None,
         description="Override LLM model (e.g. 'gpt-4o', 'claude-sonnet-4-20250514'). Uses provider default if omitted.",
     )
+    enable_temporal: bool = Field(
+        default=False,
+        description="Enable temporal constraint detection. When False (default), "
+        "temporal_constraint is stripped from prompt_spec.extra even if the LLM detected one. "
+        "Set to True to include temporal_constraint in the output for downstream use.",
+    )
 
 
 class PromptEngineerResponse(BaseModel):
@@ -405,11 +411,19 @@ async def run_prompt_engineer(request: PromptEngineerRequest) -> PromptEngineerR
             )
         
         prompt_spec, tool_plan = result.output
-        
+
+        spec_dict = prompt_spec.model_dump(mode="json")
+
+        # Strip temporal_constraint unless explicitly enabled
+        if not request.enable_temporal:
+            extra = spec_dict.get("extra")
+            if isinstance(extra, dict):
+                extra.pop("temporal_constraint", None)
+
         return PromptEngineerResponse(
             ok=True,
             market_id=prompt_spec.market.market_id,
-            prompt_spec=prompt_spec.model_dump(mode="json"),
+            prompt_spec=spec_dict,
             tool_plan=tool_plan.model_dump(mode="json"),
             metadata=result.metadata or {},
         )
