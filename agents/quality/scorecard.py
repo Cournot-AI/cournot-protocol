@@ -109,6 +109,11 @@ def _domain_matches(actual: str, required: str) -> bool:
     return required in actual or actual in required
 
 
+def _has_deferred_requirements(prompt_spec: PromptSpec) -> bool:
+    """Check if any data requirement uses deferred source discovery."""
+    return any(req.deferred_source_discovery for req in prompt_spec.data_requirements)
+
+
 def _assess_source_match(
     prompt_spec: PromptSpec,
     evidence_bundles: list[EvidenceBundle],
@@ -128,6 +133,14 @@ def _assess_source_match(
         return "FULL"
     elif matched > 0:
         return "PARTIAL"
+
+    # When deferred requirements coexist with specific-domain requirements,
+    # the specific domains are preferred but not mandatory.  Evidence from
+    # non-required domains still satisfies the deferred requirement, so
+    # having *any* successful evidence should be PARTIAL, not NONE.
+    if _has_deferred_requirements(prompt_spec) and actual:
+        return "PARTIAL"
+
     return "NONE"
 
 
