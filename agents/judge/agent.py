@@ -255,7 +255,7 @@ class JudgeLLM(BaseAgent):
         # Inject temporal context if present
         temporal_ctx = ctx.extra.get("temporal_context")
         if temporal_ctx:
-            messages.append({"role": "user", "content": self._build_temporal_context_prompt(temporal_ctx, ctx.now())})
+            messages.append({"role": "user", "content": self._build_temporal_context_prompt(temporal_ctx, ctx.now(), prompt_spec)})
 
         # Get LLM response
         response = ctx.llm.chat(messages)
@@ -376,6 +376,7 @@ class JudgeLLM(BaseAgent):
     def _build_temporal_context_prompt(
         temporal_ctx: dict[str, Any],
         current_time: datetime,
+        prompt_spec: PromptSpec | None = None,
     ) -> str:
         """Build a temporal advisory block for the Judge LLM.
 
@@ -387,6 +388,15 @@ class JudgeLLM(BaseAgent):
         reason = temporal_ctx.get("reason", "No reason provided")
 
         status = _resolve_temporal_status(event_time_raw, current_time)
+
+        is_multi = prompt_spec is not None and prompt_spec.is_multi_choice
+        if is_multi:
+            outcomes_label = ", ".join(prompt_spec.possible_outcomes)
+            affirm = f"the matching outcome (one of: {outcomes_label})"
+            negative = "rule out other outcomes"
+        else:
+            affirm = "YES"
+            negative = "NO"
 
         parts: list[str] = [
             "## TEMPORAL ADVISORY",
@@ -406,12 +416,12 @@ class JudgeLLM(BaseAgent):
                 "exact deadline time.",
                 "",
                 "1) If evidence shows the event ALREADY HAPPENED before the deadline,",
-                "   you CAN return YES with appropriate confidence.",
-                "2) You MUST NOT return NO — the event could still happen before the",
+                f"   you CAN return {affirm} with appropriate confidence.",
+                f"2) You MUST NOT return {negative} — the event could still happen before the",
                 "   deadline. Absence of evidence is not evidence of absence.",
                 "3) If no evidence confirms the event has occurred yet, return INVALID",
                 "   with low confidence (0.2-0.3) and note the deadline has not passed.",
-                "4) If the Auditor returned NO, override to INVALID — we cannot rule",
+                f"4) If the Auditor returned {negative}, override to INVALID — we cannot rule",
                 "   out the event occurring before the deadline.",
             ])
         elif status == "DEADLINE_RECENT":
@@ -421,9 +431,9 @@ class JudgeLLM(BaseAgent):
                 "Evidence of the final state may still be emerging.",
                 "",
                 "1) If evidence confirms the event occurred before the deadline,",
-                "   return YES.",
-                "2) If evidence confirms the event did NOT occur and the deadline has",
-                "   now passed, you may return NO.",
+                f"   return {affirm}.",
+                f"2) If evidence confirms the event did NOT occur and the deadline has",
+                f"   now passed, you may return {negative}.",
                 "3) If evidence is still unclear or emerging, return INVALID.",
             ])
         else:

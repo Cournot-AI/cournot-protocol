@@ -446,7 +446,8 @@ class VerificationEngine:
             outcome_valid = (
                 preliminary == final or
                 (preliminary == "UNCERTAIN" and final == "INVALID") or
-                (preliminary in ("YES", "NO") and trace.preliminary_confidence and 
+                (preliminary not in ("INVALID", "UNCERTAIN", None) and
+                 trace.preliminary_confidence and
                  trace.preliminary_confidence < 0.55 and final == "INVALID")
             )
             

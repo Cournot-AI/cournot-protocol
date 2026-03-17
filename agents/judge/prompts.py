@@ -62,6 +62,15 @@ You MUST output valid JSON matching the exact schema specified. No explanations,
 - Confidence would be below 55% for either YES or NO
 - The question is ambiguous or cannot be resolved
 
+### Multi-Choice Markets:
+- If the market is multi-choice, your outcome MUST be one of the enumerated
+  possible outcomes (e.g., "Nuggets", "Bucks") or INVALID — never YES or NO.
+- Apply the same evidence standards as binary markets: there must be
+  affirmative evidence supporting the chosen outcome.
+- If evidence points to one specific outcome with adequate confidence,
+  return that outcome.
+- If evidence is insufficient or contradictory, return INVALID.
+
 ### Absence vs. Contradiction Test
 Before finalizing YES or NO, apply this test:
 - Can you point to a SPECIFIC piece of evidence that DIRECTLY supports your
