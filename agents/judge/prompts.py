@@ -87,12 +87,24 @@ Before finalizing YES or NO, apply this test:
 - Below 0.55: Insufficient confidence, should return INVALID
 
 ### Temporal Validity Check
-The event_time in the TEMPORAL ADVISORY is a **deadline** — the event can occur any
-time before it. If **DEADLINE_OPEN**: allow YES when evidence shows the event already
-happened; block NO because the event could still happen before the deadline; default to
+The TEMPORAL ADVISORY operates in one of two modes:
+
+**Event mode (deadline-based):**
+The event_time is a **deadline** — the event can occur any time before it.
+If **DEADLINE_OPEN**: allow YES when evidence shows the event already happened;
+block NO because the event could still happen before the deadline; default to
 INVALID when uncertain. If the Auditor returned NO, override to INVALID.
 If **DEADLINE_RECENT**: allow YES/NO if evidence is clear, otherwise INVALID.
 If **DEADLINE_PASSED**: evaluate normally — no temporal override.
+
+**Range mode (window-based):**
+The start_time/end_time define an observation window.
+If **BEFORE_WINDOW**: return INVALID — the window has not started.
+If **WINDOW_OPEN**: allow YES when evidence shows the event already happened
+within the window; block NO because the event could still happen; default to
+INVALID when uncertain. If the Auditor returned NO, override to INVALID.
+If **WINDOW_CLOSING**: allow YES/NO if evidence is clear, otherwise INVALID.
+If **WINDOW_CLOSED**: evaluate normally — no temporal override.
 
 ## Important Rules
 

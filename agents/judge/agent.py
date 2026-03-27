@@ -21,6 +21,10 @@ from typing import Any, TYPE_CHECKING
 
 from agents.base import AgentCapability, AgentResult, AgentStep, BaseAgent
 from agents.registry import register_agent
+from agents.temporal import (
+    resolve_temporal_status,
+    build_temporal_context_prompt,
+)
 from core.schemas import (
     CheckResult,
     DeterministicVerdict,
@@ -36,36 +40,10 @@ from .prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 if TYPE_CHECKING:
     from agents.context import AgentContext
 
-
-def _resolve_temporal_status(event_time_raw: str, current_time: datetime) -> str:
-    """Compute DEADLINE_OPEN/DEADLINE_RECENT/DEADLINE_PASSED from event_time vs current_time.
-
-    event_time represents the **deadline** by which the event must occur, not
-    necessarily when the event happens.  The event can occur at any time before
-    the deadline.
-
-    - DEADLINE_OPEN: deadline is still in the future — the event may have
-      already happened (allow YES) but cannot be ruled out (block NO).
-    - DEADLINE_RECENT: deadline passed within the last 24 hours — evidence of
-      the final state may still be emerging.
-    - DEADLINE_PASSED: deadline passed more than 24 hours ago — resolve normally.
-    """
-    try:
-        event_dt = datetime.fromisoformat(event_time_raw.replace("Z", "+00:00"))
-        if event_dt.tzinfo is None:
-            event_dt = event_dt.replace(tzinfo=timezone.utc)
-    except (ValueError, AttributeError):
-        return "UNKNOWN"
-
-    if current_time.tzinfo is None:
-        current_time = current_time.replace(tzinfo=timezone.utc)
-
-    if event_dt > current_time:
-        return "DEADLINE_OPEN"
-    elif current_time - event_dt < timedelta(hours=24):
-        return "DEADLINE_RECENT"
-    else:
-        return "DEADLINE_PASSED"
+# Backwards-compat re-export so existing imports still work
+_resolve_temporal_status = lambda event_time_raw, current_time: resolve_temporal_status(
+    {"event_time": event_time_raw}, current_time,
+)
 
 
 class JudgeLLM(BaseAgent):
@@ -255,7 +233,7 @@ class JudgeLLM(BaseAgent):
         # Inject temporal context if present
         temporal_ctx = ctx.extra.get("temporal_context")
         if temporal_ctx:
-            messages.append({"role": "user", "content": self._build_temporal_context_prompt(temporal_ctx, ctx.now(), prompt_spec)})
+            messages.append({"role": "user", "content": build_temporal_context_prompt(temporal_ctx, ctx.now(), prompt_spec, role="judge")})
 
         # Get LLM response
         response = ctx.llm.chat(messages)
@@ -372,77 +350,12 @@ class JudgeLLM(BaseAgent):
         ])
         return "\n".join(parts)
 
-    @staticmethod
-    def _build_temporal_context_prompt(
-        temporal_ctx: dict[str, Any],
-        current_time: datetime,
-        prompt_spec: PromptSpec | None = None,
-    ) -> str:
-        """Build a temporal advisory block for the Judge LLM.
-
-        Computes the temporal status (FUTURE/ACTIVE/PAST) at resolution time
-        by comparing the event_time against current_time, then informs the
-        judge so it can override the auditor for future/active events.
-        """
-        event_time_raw = temporal_ctx.get("event_time", "")
-        reason = temporal_ctx.get("reason", "No reason provided")
-
-        status = _resolve_temporal_status(event_time_raw, current_time)
-
-        is_multi = prompt_spec is not None and prompt_spec.is_multi_choice
-        if is_multi:
-            outcomes_label = ", ".join(prompt_spec.possible_outcomes)
-            affirm = f"the matching outcome (one of: {outcomes_label})"
-            negative = "rule out other outcomes"
-        else:
-            affirm = "YES"
-            negative = "NO"
-
-        parts: list[str] = [
-            "## TEMPORAL ADVISORY",
-            "",
-            f"Temporal status: {status}",
-            f"Resolution deadline: {event_time_raw}",
-            f"Current time: {current_time.isoformat()}",
-            f"Reason: {reason}",
-            "",
-        ]
-
-        if status == "DEADLINE_OPEN":
-            parts.extend([
-                "INSTRUCTIONS:",
-                "The resolution deadline has NOT passed yet. The event may occur at",
-                "any time before the deadline — it does NOT have to happen at the",
-                "exact deadline time.",
-                "",
-                "1) If evidence shows the event ALREADY HAPPENED before the deadline,",
-                f"   you CAN return {affirm} with appropriate confidence.",
-                f"2) You MUST NOT return {negative} — the event could still happen before the",
-                "   deadline. Absence of evidence is not evidence of absence.",
-                "3) If no evidence confirms the event has occurred yet, return INVALID",
-                "   with low confidence (0.2-0.3) and note the deadline has not passed.",
-                f"4) If the Auditor returned {negative}, override to INVALID — we cannot rule",
-                "   out the event occurring before the deadline.",
-            ])
-        elif status == "DEADLINE_RECENT":
-            parts.extend([
-                "INSTRUCTIONS:",
-                "The resolution deadline passed very recently (within 24 hours).",
-                "Evidence of the final state may still be emerging.",
-                "",
-                "1) If evidence confirms the event occurred before the deadline,",
-                f"   return {affirm}.",
-                f"2) If evidence confirms the event did NOT occur and the deadline has",
-                f"   now passed, you may return {negative}.",
-                "3) If evidence is still unclear or emerging, return INVALID.",
-            ])
-        else:
-            parts.extend([
-                "INSTRUCTIONS:",
-                "1) The deadline has passed. Evaluate the Auditor's reasoning normally.",
-            ])
-
-        return "\n".join(parts)
+    # Backwards-compat: keep as static-method alias so existing callers still work.
+    _build_temporal_context_prompt = staticmethod(
+        lambda temporal_ctx, current_time, prompt_spec=None: build_temporal_context_prompt(
+            temporal_ctx, current_time, prompt_spec, role="judge",
+        )
+    )
 
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from LLM response."""

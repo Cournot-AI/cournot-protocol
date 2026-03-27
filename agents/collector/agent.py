@@ -56,6 +56,33 @@ if TYPE_CHECKING:
     from core.schemas import DataRequirement, SourceTarget
 
 
+def _build_collector_temporal_hint(temporal_ctx: dict[str, Any]) -> str:
+    """Build a short temporal hint string for collector prompts.
+
+    Returns a ``### TEMPORAL CONSTRAINT`` section that tells the LLM
+    which dates to focus queries on.  Returns empty string if the
+    temporal context is empty or invalid.
+    """
+    mode = temporal_ctx.get("mode", "event")
+    if mode == "range":
+        start = temporal_ctx.get("start_time", "")
+        end = temporal_ctx.get("end_time", "")
+        if start and end:
+            return (
+                f"### TEMPORAL CONSTRAINT\n"
+                f"Focus on events between {start} and {end}. "
+                f"Evidence outside this window is irrelevant.\n"
+            )
+    else:
+        event_time = temporal_ctx.get("event_time", "")
+        if event_time:
+            return (
+                f"### TEMPORAL CONSTRAINT\n"
+                f"Focus on evidence around {event_time}.\n"
+            )
+    return ""
+
+
 class CollectorHTTP(BaseAgent):
     """
     HTTP-based Collector Agent.
@@ -715,6 +742,12 @@ class CollectorWebPageReader(BaseAgent):
 
         results_text = "\n\n---\n\n".join(formatted_results)
 
+        # Build optional temporal hint for synthesis
+        temporal_hint = ""
+        temporal_ctx = ctx.extra.get("temporal_context")
+        if temporal_ctx:
+            temporal_hint = _build_collector_temporal_hint(temporal_ctx)
+
         synthesis_prompt = (
             f"### CONTEXT\n"
             f"Current Date/Time: {current_time_str}\n"
@@ -723,6 +756,7 @@ class CollectorWebPageReader(BaseAgent):
             f"Critical Assumptions (Must Follow):\n{assumptions_str}\n"
             f"Entity: {semantics.target_entity}\n"
             f"Predicate: {semantics.predicate}\n"
+            f"{temporal_hint}"
             f"### DATA REQUIREMENT\n"
             f"{requirement.description}\n\n"
             f"### SEARCH RESULTS\n"
@@ -1865,6 +1899,12 @@ class CollectorAgenticRAG(BaseAgent):
                 + "\n".join(f"- {g}" for g in previous_gaps)
             )
 
+        # Build optional temporal hint for query planning
+        temporal_hint = ""
+        temporal_ctx = ctx.extra.get("temporal_context")
+        if temporal_ctx:
+            temporal_hint = _build_collector_temporal_hint(temporal_ctx)
+
         prompt = (
             f"Generate a retrieval blueprint for this data requirement:\n"
             f"- Requirement: {requirement.description}\n"
@@ -1875,6 +1915,7 @@ class CollectorAgenticRAG(BaseAgent):
             f"- Predicate: {semantics.predicate}\n"
             f"- Threshold: {semantics.threshold or 'N/A'}\n"
             f"- Current UTC time: {current_time_str}\n"
+            f"{temporal_hint}"
             f"{gaps_text}"
         )
 
@@ -2680,6 +2721,12 @@ class CollectorGraphRAG(BaseAgent):
             started_at=ctx.now().isoformat(),
         )
 
+        # Build optional temporal hint for query planning
+        graphrag_temporal_hint = ""
+        graphrag_temporal_ctx = ctx.extra.get("temporal_context")
+        if graphrag_temporal_ctx:
+            graphrag_temporal_hint = _build_collector_temporal_hint(graphrag_temporal_ctx)
+
         prompt = (
             f"Generate a retrieval blueprint for this data requirement:\n"
             f"- Requirement: {requirement.description}\n"
@@ -2690,6 +2737,7 @@ class CollectorGraphRAG(BaseAgent):
             f"- Predicate: {semantics.predicate}\n"
             f"- Threshold: {semantics.threshold or 'N/A'}\n"
             f"- Current UTC time: {current_time_str}\n"
+            f"{graphrag_temporal_hint}"
         )
 
         messages = [
@@ -3572,6 +3620,8 @@ def _register_agents() -> None:
     from .gemini_grounded_agent import CollectorOpenSearch
     from .source_pinned_agent import CollectorSitePinned
     from .crp_agent import CollectorCRP
+    from .api_data_agent import CollectorAPIData
+    from .browserless_agent import CollectorBrowserless
 
     register_agent(
         step=AgentStep.COLLECTOR,
@@ -3598,6 +3648,20 @@ def _register_agents() -> None:
                 "Searches only within specified data-source domains. "
                 "Discovers relevant pages, extracts structured data, and "
                 "retries up to 3 times to find domain-specific evidence."
+            ),
+        },
+    )
+
+    register_agent(
+        step=AgentStep.COLLECTOR,
+        name="CollectorBrowserless",
+        factory=lambda ctx: CollectorBrowserless(),
+        capabilities={AgentCapability.LLM, AgentCapability.NETWORK},
+        priority=197,  # Between SitePinned (198) and CRP (195)
+        metadata={
+            "description": (
+                "Site-pinned collector using Browserless BQL (stealth + "
+                "Cloudflare solver) instead of Jina Reader for JS-heavy pages."
             ),
         },
     )
@@ -3666,6 +3730,20 @@ def _register_agents() -> None:
         capabilities={AgentCapability.LLM},
         priority=180,  # 3rd — preferred when LLM available
         metadata={"description": "Browses specific URLs to fetch and interpret page content. Extracts structured data with automatic repair. Supports deferred source discovery via search."},
+    )
+
+    register_agent(
+        step=AgentStep.COLLECTOR,
+        name="CollectorAPIData",
+        factory=lambda ctx: CollectorAPIData(),
+        capabilities={AgentCapability.NETWORK},
+        priority=110,  # Between CollectorHTTP (100) and GraphRAG (150)
+        metadata={
+            "description": (
+                "Fetches data from structured APIs (weather, crypto). "
+                "Matches requirements to API providers via keyword matching."
+            ),
+        },
     )
 
     register_agent(

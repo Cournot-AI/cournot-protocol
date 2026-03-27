@@ -510,11 +510,16 @@ class Pipeline:
         """Step 2: Collect evidence."""
         ctx = self._resolve_ctx(state.context, AgentStep.COLLECTOR)
         # ctx.logger.debug(f"getting llm client: {ctx.llm}")
-        
+
         if not state.prompt_spec or not state.tool_plan:
             state.add_error("Cannot collect evidence: missing prompt_spec or tool_plan")
             return state
-        
+
+        # Inject temporal constraint from prompt_spec into collector context
+        temporal_constraint = (state.prompt_spec.extra or {}).get("temporal_constraint")
+        if temporal_constraint:
+            ctx.extra["temporal_context"] = temporal_constraint
+
         try:
             agent = self._select_agent(AgentStep.COLLECTOR, override, ctx)
             if agent is None:

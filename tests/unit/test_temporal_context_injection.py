@@ -6,6 +6,9 @@ the auditor (LLMReasoner) and judge (JudgeLLM) inject a TEMPORAL ADVISORY
 block into their LLM messages, computing the temporal status
 (DEADLINE_OPEN/DEADLINE_RECENT/DEADLINE_PASSED) at resolution time from
 event_time (deadline) vs current_time.
+
+Also tests range-mode temporal statuses:
+BEFORE_WINDOW / WINDOW_OPEN / WINDOW_CLOSING / WINDOW_CLOSED.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from agents.context import AgentContext, FrozenClock, NoOpCache
 from agents.auditor.llm_reasoner import LLMReasoner, _resolve_temporal_status
 from agents.judge.agent import JudgeLLM
 from agents.judge.agent import _resolve_temporal_status as _judge_resolve_temporal_status
+from agents.temporal import resolve_temporal_status, build_temporal_context_prompt
 from core.schemas.evidence import EvidenceBundle, EvidenceItem, Provenance
 from core.schemas.market import (
     DisputePolicy,
@@ -166,6 +170,39 @@ SAMPLE_TEMPORAL_PASSED = {
     "enabled": True,
     "event_time": "2025-06-15T00:00:00Z",  # well before 2026-01-01 → DEADLINE_PASSED
     "reason": "Deadline passed in June 2025",
+}
+
+
+# ---------------------------------------------------------------------------
+# Range-mode sample data
+# ---------------------------------------------------------------------------
+
+SAMPLE_RANGE_BEFORE_WINDOW = {
+    "mode": "range",
+    "start_time": "2026-04-01T00:00:00Z",  # FROZEN_NOW (Jan 1) < start → BEFORE_WINDOW
+    "end_time": "2026-06-30T23:59:59Z",
+    "reason": "Q2 2026 observation window",
+}
+
+SAMPLE_RANGE_WINDOW_OPEN = {
+    "mode": "range",
+    "start_time": "2025-10-01T00:00:00Z",  # start in the past
+    "end_time": "2026-03-31T23:59:59Z",     # end in the future → WINDOW_OPEN
+    "reason": "H2 2025 + Q1 2026 window",
+}
+
+SAMPLE_RANGE_WINDOW_CLOSING = {
+    "mode": "range",
+    "start_time": "2025-10-01T00:00:00Z",
+    "end_time": "2025-12-31T18:00:00Z",     # 6 hours before FROZEN_NOW → within 24h → WINDOW_CLOSING
+    "reason": "Window closed recently",
+}
+
+SAMPLE_RANGE_WINDOW_CLOSED = {
+    "mode": "range",
+    "start_time": "2025-01-01T00:00:00Z",
+    "end_time": "2025-06-30T00:00:00Z",     # well before FROZEN_NOW → WINDOW_CLOSED
+    "reason": "Window closed in June 2025",
 }
 
 
@@ -554,3 +591,218 @@ class TestJudgeTemporalContextInjection:
         assert result.success
         verdict = result.output
         assert verdict.outcome == "INVALID"
+
+
+# ---------------------------------------------------------------------------
+# Tests: resolve_temporal_status — range mode
+# ---------------------------------------------------------------------------
+
+class TestResolveRangeTemporalStatus:
+    """Test range-mode status computation from start_time/end_time vs current_time."""
+
+    def test_before_window(self):
+        status = resolve_temporal_status(SAMPLE_RANGE_BEFORE_WINDOW, FROZEN_NOW)
+        assert status == "BEFORE_WINDOW"
+
+    def test_window_open(self):
+        status = resolve_temporal_status(SAMPLE_RANGE_WINDOW_OPEN, FROZEN_NOW)
+        assert status == "WINDOW_OPEN"
+
+    def test_window_closing(self):
+        status = resolve_temporal_status(SAMPLE_RANGE_WINDOW_CLOSING, FROZEN_NOW)
+        assert status == "WINDOW_CLOSING"
+
+    def test_window_closed(self):
+        status = resolve_temporal_status(SAMPLE_RANGE_WINDOW_CLOSED, FROZEN_NOW)
+        assert status == "WINDOW_CLOSED"
+
+    def test_missing_start_time(self):
+        ctx = {"mode": "range", "end_time": "2026-06-30T00:00:00Z"}
+        status = resolve_temporal_status(ctx, FROZEN_NOW)
+        assert status == "UNKNOWN"
+
+    def test_missing_end_time(self):
+        ctx = {"mode": "range", "start_time": "2025-10-01T00:00:00Z"}
+        status = resolve_temporal_status(ctx, FROZEN_NOW)
+        assert status == "UNKNOWN"
+
+
+# ---------------------------------------------------------------------------
+# Tests: build_temporal_context_prompt — range mode
+# ---------------------------------------------------------------------------
+
+class TestBuildRangeTemporalPrompt:
+    """Test range-mode prompt builders."""
+
+    def test_before_window_prompt(self):
+        prompt = build_temporal_context_prompt(SAMPLE_RANGE_BEFORE_WINDOW, FROZEN_NOW)
+        assert "TEMPORAL ADVISORY" in prompt
+        assert "Temporal status: BEFORE_WINDOW" in prompt
+        assert "too early" in prompt.lower() or "NOT started" in prompt
+        assert "INVALID" in prompt
+
+    def test_window_open_prompt(self):
+        prompt = build_temporal_context_prompt(SAMPLE_RANGE_WINDOW_OPEN, FROZEN_NOW)
+        assert "Temporal status: WINDOW_OPEN" in prompt
+        assert "MUST NOT return NO" in prompt
+        assert "CAN return YES" in prompt
+
+    def test_window_closing_prompt(self):
+        prompt = build_temporal_context_prompt(SAMPLE_RANGE_WINDOW_CLOSING, FROZEN_NOW)
+        assert "Temporal status: WINDOW_CLOSING" in prompt
+        assert "recently" in prompt
+
+    def test_window_closed_prompt(self):
+        prompt = build_temporal_context_prompt(SAMPLE_RANGE_WINDOW_CLOSED, FROZEN_NOW)
+        assert "Temporal status: WINDOW_CLOSED" in prompt
+        assert "normally" in prompt
+
+    def test_judge_role_override(self):
+        prompt = build_temporal_context_prompt(
+            SAMPLE_RANGE_WINDOW_OPEN, FROZEN_NOW, role="judge",
+        )
+        assert "Auditor returned" in prompt
+
+    def test_shows_both_times(self):
+        prompt = build_temporal_context_prompt(SAMPLE_RANGE_BEFORE_WINDOW, FROZEN_NOW)
+        assert "2026-04-01T00:00:00Z" in prompt
+        assert "2026-06-30T23:59:59Z" in prompt
+        assert "Current time:" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Tests: backwards compatibility
+# ---------------------------------------------------------------------------
+
+class TestBackwardsCompatibility:
+    """Verify old-style dicts (no mode field) still work."""
+
+    def test_old_style_dict_defaults_to_event(self):
+        """Dict without 'mode' should behave as event mode."""
+        status = resolve_temporal_status(SAMPLE_TEMPORAL_FUTURE, FROZEN_NOW)
+        assert status == "DEADLINE_OPEN"
+
+    def test_old_auditor_import_still_works(self):
+        """The old import path agents.auditor.llm_reasoner._resolve_temporal_status should work."""
+        status = _resolve_temporal_status("2026-09-23T00:00:00Z", FROZEN_NOW)
+        assert status == "DEADLINE_OPEN"
+
+    def test_old_judge_import_still_works(self):
+        """The old import path agents.judge.agent._resolve_temporal_status should work."""
+        status = _judge_resolve_temporal_status("2026-09-23T00:00:00Z", FROZEN_NOW)
+        assert status == "DEADLINE_OPEN"
+
+    def test_auditor_static_method_still_works(self):
+        """LLMReasoner._build_temporal_context_prompt should still work."""
+        prompt = LLMReasoner._build_temporal_context_prompt(SAMPLE_TEMPORAL_FUTURE, FROZEN_NOW)
+        assert "TEMPORAL ADVISORY" in prompt
+        assert "DEADLINE_OPEN" in prompt
+
+    def test_judge_static_method_still_works(self):
+        """JudgeLLM._build_temporal_context_prompt should still work."""
+        prompt = JudgeLLM._build_temporal_context_prompt(SAMPLE_TEMPORAL_FUTURE, FROZEN_NOW)
+        assert "TEMPORAL ADVISORY" in prompt
+        assert "DEADLINE_OPEN" in prompt
+
+    def test_explicit_event_mode_matches_default(self):
+        """Dict with mode='event' should give same result as no mode."""
+        explicit = {**SAMPLE_TEMPORAL_FUTURE, "mode": "event"}
+        assert resolve_temporal_status(explicit, FROZEN_NOW) == \
+               resolve_temporal_status(SAMPLE_TEMPORAL_FUTURE, FROZEN_NOW)
+
+    def test_enabled_field_ignored(self):
+        """The old 'enabled' field should be silently ignored."""
+        ctx_with_enabled = {
+            "enabled": True,
+            "event_time": "2026-09-23T00:00:00Z",
+            "reason": "test",
+        }
+        status = resolve_temporal_status(ctx_with_enabled, FROZEN_NOW)
+        assert status == "DEADLINE_OPEN"
+
+
+# ---------------------------------------------------------------------------
+# Tests: range-mode injection into auditor/judge
+# ---------------------------------------------------------------------------
+
+class TestAuditorRangeTemporalInjection:
+    """Verify range-mode temporal context is injected into auditor LLM messages."""
+
+    def _make_valid_llm_response(self) -> str:
+        return json.dumps({
+            "trace_id": "trace_test",
+            "steps": [{"step_id": "s1", "step_type": "inference",
+                        "description": "check", "evidence_refs": []}],
+            "conflicts": [],
+            "evidence_summary": "Checked.",
+            "reasoning_summary": "Window not open.",
+            "preliminary_outcome": "INVALID",
+            "preliminary_confidence": 0.2,
+            "recommended_rule_id": "R1",
+        })
+
+    def test_range_before_window_injected(self):
+        ctx = _make_mock_ctx(
+            temporal_context=SAMPLE_RANGE_BEFORE_WINDOW,
+            llm_response=self._make_valid_llm_response(),
+        )
+        reasoner = LLMReasoner(strict_mode=True)
+        reasoner.reason(ctx, _make_prompt_spec(), [_make_evidence_bundle()])
+
+        messages = ctx.llm.chat.call_args[0][0]
+        temporal = [m for m in messages if "## TEMPORAL ADVISORY" in m.get("content", "")]
+        assert len(temporal) == 1
+        assert "BEFORE_WINDOW" in temporal[0]["content"]
+
+    def test_range_window_open_injected(self):
+        ctx = _make_mock_ctx(
+            temporal_context=SAMPLE_RANGE_WINDOW_OPEN,
+            llm_response=self._make_valid_llm_response(),
+        )
+        reasoner = LLMReasoner(strict_mode=True)
+        reasoner.reason(ctx, _make_prompt_spec(), [_make_evidence_bundle()])
+
+        messages = ctx.llm.chat.call_args[0][0]
+        temporal = [m for m in messages if "## TEMPORAL ADVISORY" in m.get("content", "")]
+        assert len(temporal) == 1
+        assert "WINDOW_OPEN" in temporal[0]["content"]
+
+
+class TestJudgeRangeTemporalInjection:
+    """Verify range-mode temporal context is injected into judge LLM messages."""
+
+    def _make_valid_llm_response(self) -> str:
+        return json.dumps({
+            "outcome": "INVALID",
+            "confidence": 0.2,
+            "resolution_rule_id": "R1",
+            "reasoning_valid": True,
+            "reasoning_issues": [],
+            "final_justification": "Window not open.",
+        })
+
+    def test_range_before_window_injected(self):
+        ctx = _make_mock_ctx(
+            temporal_context=SAMPLE_RANGE_BEFORE_WINDOW,
+            llm_response=self._make_valid_llm_response(),
+        )
+        judge = JudgeLLM(strict_mode=True)
+        judge._get_llm_review(ctx, _make_prompt_spec(), [_make_evidence_bundle()], _make_reasoning_trace())
+
+        messages = ctx.llm.chat.call_args[0][0]
+        temporal = [m for m in messages if "## TEMPORAL ADVISORY" in m.get("content", "")]
+        assert len(temporal) == 1
+        assert "BEFORE_WINDOW" in temporal[0]["content"]
+
+    def test_range_window_open_injected(self):
+        ctx = _make_mock_ctx(
+            temporal_context=SAMPLE_RANGE_WINDOW_OPEN,
+            llm_response=self._make_valid_llm_response(),
+        )
+        judge = JudgeLLM(strict_mode=True)
+        judge._get_llm_review(ctx, _make_prompt_spec(), [_make_evidence_bundle()], _make_reasoning_trace())
+
+        messages = ctx.llm.chat.call_args[0][0]
+        temporal = [m for m in messages if "## TEMPORAL ADVISORY" in m.get("content", "")]
+        assert len(temporal) == 1
+        assert "WINDOW_OPEN" in temporal[0]["content"]

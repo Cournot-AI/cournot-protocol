@@ -7,10 +7,10 @@ Endpoints:
 - POST /step/prompt        - Compile query into PromptSpec + ToolPlan
 - POST /step/collect       - Collect evidence from sources
 - POST /step/quality_check - Assess evidence quality, return retry hints
-- POST /step/audit         - Generate reasoning trace
-- POST /step/judge         - Produce final verdict
-- POST /step/bundle        - Build PoR bundle
-- POST /step/resolve       - Run all steps (collect → audit → judge → bundle)
+- POST /step/audit            - Generate reasoning trace
+- POST /step/judge            - Produce final verdict
+- POST /step/bundle           - Build PoR bundle
+- POST /step/resolve          - Run all steps (collect → audit → judge → bundle)
 """
 
 from __future__ import annotations
@@ -59,10 +59,10 @@ class PromptEngineerRequest(BaseModel):
         description="Override LLM model (e.g. 'gpt-4o', 'claude-sonnet-4-20250514'). Uses provider default if omitted.",
     )
     enable_temporal: bool = Field(
-        default=False,
-        description="Enable temporal constraint detection. When False (default), "
-        "temporal_constraint is stripped from prompt_spec.extra even if the LLM detected one. "
-        "Set to True to include temporal_constraint in the output for downstream use.",
+        default=True,
+        description="Enable temporal constraint detection. When True (default), "
+        "temporal_constraint detected by the LLM is included in prompt_spec.extra for downstream use. "
+        "Set to False to strip temporal_constraint from the output.",
     )
 
 
@@ -90,7 +90,7 @@ class ResolveRequest(BaseModel):
     tool_plan: dict[str, Any] = Field(
         ..., description="Tool execution plan (from /step/prompt output)"
     )
-    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorSitePinned", "CollectorCRP"]] = Field(
+    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorSitePinned", "CollectorBrowserless", "CollectorCRP", "CollectorAPIData"]] = Field(
         default=["CollectorWebPageReader"],
         description="Which collector agents to use (runs all in sequence)",
         min_length=1,
@@ -152,7 +152,7 @@ class CollectRequest(BaseModel):
     tool_plan: dict[str, Any] = Field(
         ..., description="Tool execution plan (from /step/prompt)"
     )
-    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorSitePinned", "CollectorCRP"]] = Field(
+    collectors: list[Literal["CollectorWebPageReader", "CollectorHyDE", "CollectorHTTP", "CollectorMock", "CollectorAgenticRAG", "CollectorGraphRAG", "CollectorPAN", "CollectorOpenSearch", "CollectorSitePinned", "CollectorBrowserless", "CollectorCRP", "CollectorAPIData"]] = Field(
         default=["CollectorWebPageReader"],
         description="Which collector agents to use (runs all in sequence)",
         min_length=1,
@@ -198,6 +198,11 @@ class CollectRequest(BaseModel):
         description="Feedback from a previous /step/quality_check call. "
         "Contains retry_hints with search_queries, required_domains, "
         "skip_domains, data_type_hint, focus_requirements, and collector_guidance.",
+    )
+    temporal_constraint: dict[str, Any] | None = Field(
+        default=None,
+        description="Temporal constraint from /step/prompt or frontend override. "
+        "When provided, informs the collector about event timing for date-targeted queries.",
     )
 
 
@@ -478,6 +483,11 @@ async def run_resolve(request: ResolveRequest) -> ResolveResponse:
             with_llm=True, with_http=True, llm_override=collector_override,
         )
 
+        # Inject temporal constraint into collector context (from prompt_spec.extra)
+        _resolve_temporal = (prompt_spec.extra or {}).get("temporal_constraint")
+        if _resolve_temporal:
+            collector_ctx.extra["temporal_context"] = _resolve_temporal
+
         evidence_bundles: list[EvidenceBundle] = []
         collectors_used: list[str] = []
 
@@ -737,6 +747,10 @@ async def run_collect(request: CollectRequest) -> CollectResponse:
         if request.quality_feedback:
             ctx.extra["quality_feedback"] = request.quality_feedback
 
+        # Pass temporal constraint to collectors via ctx.extra
+        if request.temporal_constraint:
+            ctx.extra["temporal_context"] = request.temporal_constraint
+
         registry = get_registry()
 
         bundles = []
@@ -784,9 +798,15 @@ async def run_collect(request: CollectRequest) -> CollectResponse:
                 elif collector_name == "CollectorSitePinned":
                     from agents.collector.source_pinned_agent import CollectorSitePinned
                     collector = CollectorSitePinned()
+                elif collector_name == "CollectorBrowserless":
+                    from agents.collector.browserless_agent import CollectorBrowserless
+                    collector = CollectorBrowserless()
                 elif collector_name == "CollectorCRP":
                     from agents.collector.crp_agent import CollectorCRP
                     collector = CollectorCRP()
+                elif collector_name == "CollectorAPIData":
+                    from agents.collector.api_data_agent import CollectorAPIData
+                    collector = CollectorAPIData()
                 else:
                     collector = registry.get_agent_by_name(collector_name, ctx)
             except ValueError:

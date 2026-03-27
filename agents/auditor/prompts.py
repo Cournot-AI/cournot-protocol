@@ -149,9 +149,11 @@ Silence is not evidence. "I searched and found nothing" is UNCERTAIN, not NO.
 
 ## CRITICAL — Temporal Reasoning
 
-If a TEMPORAL ADVISORY is provided in the conversation, the event_time is a **deadline**
-(the latest time by which the event must occur), NOT the exact time the event happens.
-The event can occur at any time before the deadline.
+If a TEMPORAL ADVISORY is provided in the conversation, it operates in one of two modes:
+
+### Event mode (deadline-based)
+The event_time is a **deadline** (the latest time by which the event must occur),
+NOT the exact time the event happens. The event can occur at any time before the deadline.
 
 - **DEADLINE_OPEN**: The deadline has NOT passed yet.
   - If evidence shows the event ALREADY HAPPENED before the deadline → return YES.
@@ -162,8 +164,24 @@ The event can occur at any time before the deadline.
   - YES if evidence confirms the event occurred. NO if evidence confirms it did not
     and the deadline has passed. INVALID if unclear.
 - **DEADLINE_PASSED**: The deadline has passed — evaluate evidence normally.
-- Compare the timeframe in Prediction Semantics against the deadline in the
-  TEMPORAL ADVISORY and the current date to check consistency.
+
+### Range mode (window-based)
+The start_time/end_time define an observation window. The event must occur
+within this window to count.
+
+- **BEFORE_WINDOW**: The window has NOT started yet — return INVALID (too early).
+- **WINDOW_OPEN**: The window is currently open.
+  - If evidence shows the event ALREADY HAPPENED within the window → return YES.
+  - You MUST NOT return NO — the event could still happen before the window closes.
+  - If no evidence that the event occurred yet → return INVALID with low confidence.
+- **WINDOW_CLOSING**: The window closed within the last 24 hours.
+  - Evidence of the final state may still be emerging.
+  - YES if evidence confirms occurrence within the window. NO if evidence confirms
+    non-occurrence. INVALID if unclear.
+- **WINDOW_CLOSED**: The window has closed — evaluate evidence normally.
+
+In both modes, compare the timeframe in Prediction Semantics against the temporal
+dates in the TEMPORAL ADVISORY and the current date to check consistency.
 """
 
 USER_PROMPT_TEMPLATE = """Analyze the following evidence and generate a reasoning trace.

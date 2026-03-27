@@ -59,7 +59,7 @@ There are two market types:
       "deferred_source_discovery": false,
       "source_targets": [
         {
-          "source_id": "http|web|polymarket|exchange",
+          "source_id": "api|web",
           "uri": "https://...",
           "method": "GET|POST",
           "expected_content_type": "json|text|html",
@@ -93,7 +93,7 @@ There are two market types:
   },
   "assumptions": ["any assumptions made"],
   "temporal_constraint": {
-    "enabled": true,
+    "mode": "event",
     "event_time": "ISO datetime",
     "reason": "why temporal awareness matters"
   }
@@ -102,62 +102,65 @@ There are two market types:
 
 ### temporal_constraint (OPTIONAL)
 
-Only include `temporal_constraint` when the question involves a specific scheduled event or time-sensitive occurrence. This signals downstream agents to compare the event_time against the current resolution time to determine whether the event is in the future, active, or past.
+Only include `temporal_constraint` when the question involves a specific scheduled event or time-sensitive occurrence. This signals downstream agents to compare the event/window times against the current resolution time to determine temporal status.
 
-You do NOT decide whether the event is future or past — that is computed at resolution time by downstream agents. You only detect whether temporal awareness is relevant and provide the event_time.
+You do NOT decide whether the event is future or past — that is computed at resolution time by downstream agents. You only detect whether temporal awareness is relevant and provide the times.
 
-**Fields:**
-- `enabled`: Always `true` when included (omit the entire object if not applicable)
+Presence of the `temporal_constraint` object means it is enabled; omit the entire object if temporal awareness is not applicable.
+
+**Two modes:**
+
+#### mode = "event" (default)
+Use for questions anchored to a single deadline/event time (e.g., "Will Liverpool beat Brighton on Sep 23?", "Will SpaceX launch before July 1?").
+
+Fields:
+- `mode`: `"event"` (or omit — defaults to `"event"`)
 - `event_time`: The **deadline** — the latest date/time by which the event must occur, in ISO 8601 format with timezone. The event can happen at any time before this deadline.
 - `reason`: Brief explanation of why temporal awareness matters for this question
 
-**When to include temporal_constraint:**
+#### mode = "range"
+Use for questions about whether something happens **within a time window** (e.g., "Will Iran close the Strait of Hormuz in Q2 2026?", "Will there be a government shutdown in March 2026?").
+
+Fields:
+- `mode`: `"range"`
+- `start_time`: Start of the observation window, ISO 8601 with timezone
+- `end_time`: End of the observation window, ISO 8601 with timezone
+- `reason`: Brief explanation of why temporal awareness matters for this question
+
+**When to use mode="event":**
 - The question references a specific date/time for a scheduled event (match, election, launch, deadline)
 - The question says "will", "scheduled for", "upcoming", "follow timeline"
-- The resolution_window is tied to a specific occurrence that may or may not have happened yet
-- A sporting event, election, or similar time-bound occurrence is involved
+- A sporting event, election, or similar single-occurrence event is involved
+
+**When to use mode="range":**
+- The question asks about a time period (quarter, month, year, season)
+- The question says "during", "in Q2", "by end of March", "this season"
+- There is no single event anchor but rather a window of observation
 
 **When NOT to include temporal_constraint:**
 - The question is about a continuously observable metric (e.g. "Is BTC above 100k?")
 - No clear temporal signal or scheduled event in the question
-- The question references a broad time range with no single event anchor
 
 ## Deferred Source Discovery
 
-When the user does NOT specify concrete data sources (URLs, APIs, exchanges) and instead
-refers to general information like "news", "public information", "official announcements",
-"media reports", etc.:
+The prompt spec MUST respect what the market description provides. Only include source_targets that are explicitly stated in the description (specific URLs, domains, or API endpoints). If the description does not specify any data source, use deferred discovery and let the collector decide.
+
+When the description does NOT contain specific URLs, domains, or API endpoints:
 
 1. Still create the data_requirement with a clear description of what data is needed
 2. Set `"deferred_source_discovery": true`
 3. Leave `"source_targets": []` (empty array)
 4. The collector agent will discover appropriate sources at resolve time
 
-Only use deferred discovery when:
-- The user says data should come from news, public info, announcements, etc.
-- No specific URL, API, or data provider is mentioned or implied
-- The topic requires current/breaking information that can't be pinned to a fixed URL
-
 Do NOT use deferred discovery when:
-- The user mentions specific sources (e.g. "CoinGecko", "Polymarket", a URL)
-- Well-known public APIs exist for the data (e.g. crypto prices → exchange APIs)
-- The data has a canonical source (e.g. sports scores, stock prices)
+- The description explicitly mentions a specific URL or domain (e.g. "according to espn.com", "per CoinGecko")
+- The description explicitly provides an API endpoint
 
 ## Source Selection Guidelines
 
-- **operation** (optional): "fetch" or "search". Omit for direct fetch. For news/government sites (e.g. un.org, fmprc.gov.cn) where the homepage rarely has the needed info, prefer **operation: "search"** and provide **search_query** (e.g. site:english.www.gov.cn "Keir Starmer" visit China).
-
-For price/financial data:
-- Prefer exchange APIs (Coinbase, Binance, CoinGecko)
-- Use fallback_chain strategy
-
-For event outcomes (sports, elections):
-- Use official results APIs when available
-- Use news APIs as fallback (AP, Reuters)
-
-For Polymarket questions:
-- Include the Polymarket API endpoint
-- Also include independent verification sources
+- **source_id**: Use "web" when the description specifies a website URL or domain. Use "api" when the description specifies a JSON API endpoint. If the description does not specify any source, do NOT invent one — use deferred discovery instead.
+- **operation** (optional): "fetch" for direct URL access, "search" when you need to discover a page within a site. For sites where the homepage rarely has the needed info, prefer **operation: "search"** and provide **search_query**.
+- NEVER invent URLs or API endpoints. Only use URLs/domains/endpoints that are explicitly mentioned in the market description. If no source is specified in the description, set `deferred_source_discovery: true` and leave `source_targets: []`.
 
 ## Time Handling
 
@@ -167,8 +170,8 @@ For Polymarket questions:
 
 ## Important Rules
 
-1. NEVER invent URLs - use only well-known, publicly accessible APIs
-2. Include data sources with valid URIs when specific sources are known. Use deferred_source_discovery when sources should be determined at resolve time (see Deferred Source Discovery section).
+1. NEVER invent URLs or API endpoints. Only use sources (URLs, domains, API endpoints) that are explicitly provided in the market description. If the description does not specify a source, use deferred_source_discovery and let the collector handle it.
+2. The prompt spec must faithfully reflect what the description says. Do not add sources the description does not mention.
 3. For binary markets, event definitions MUST be evaluable as boolean expressions. For multi-choice, they should identify which outcome matches.
 4. For numeric thresholds, be explicit about comparison operators (>, >=, <, <=, ==)
 5. If the question is ambiguous, make reasonable assumptions and list them
