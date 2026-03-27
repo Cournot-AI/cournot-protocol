@@ -3620,8 +3620,6 @@ def _register_agents() -> None:
     from .gemini_grounded_agent import CollectorOpenSearch
     from .source_pinned_agent import CollectorSitePinned
     from .crp_agent import CollectorCRP
-    from .api_data_agent import CollectorAPIData
-    from .browserless_agent import CollectorBrowserless
 
     register_agent(
         step=AgentStep.COLLECTOR,
@@ -3648,20 +3646,6 @@ def _register_agents() -> None:
                 "Searches only within specified data-source domains. "
                 "Discovers relevant pages, extracts structured data, and "
                 "retries up to 3 times to find domain-specific evidence."
-            ),
-        },
-    )
-
-    register_agent(
-        step=AgentStep.COLLECTOR,
-        name="CollectorBrowserless",
-        factory=lambda ctx: CollectorBrowserless(),
-        capabilities={AgentCapability.LLM, AgentCapability.NETWORK},
-        priority=197,  # Between SitePinned (198) and CRP (195)
-        metadata={
-            "description": (
-                "Site-pinned collector using Browserless BQL (stealth + "
-                "Cloudflare solver) instead of Jina Reader for JS-heavy pages."
             ),
         },
     )
@@ -3730,20 +3714,6 @@ def _register_agents() -> None:
         capabilities={AgentCapability.LLM},
         priority=180,  # 3rd — preferred when LLM available
         metadata={"description": "Browses specific URLs to fetch and interpret page content. Extracts structured data with automatic repair. Supports deferred source discovery via search."},
-    )
-
-    register_agent(
-        step=AgentStep.COLLECTOR,
-        name="CollectorAPIData",
-        factory=lambda ctx: CollectorAPIData(),
-        capabilities={AgentCapability.NETWORK},
-        priority=110,  # Between CollectorHTTP (100) and GraphRAG (150)
-        metadata={
-            "description": (
-                "Fetches data from structured APIs (weather, crypto). "
-                "Matches requirements to API providers via keyword matching."
-            ),
-        },
     )
 
     register_agent(

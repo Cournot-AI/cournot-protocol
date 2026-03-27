@@ -88,6 +88,28 @@ class AgentsConfig:
 
 
 @dataclass
+class APIDataProviderConfig:
+    """Per-provider configuration for the API data collector."""
+    enabled: bool = True
+    api_key: str | None = None
+    base_url: str | None = None
+    timeout: float = 30.0
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class APIDataConfig:
+    """Configuration for the CollectorAPIData agent."""
+    enabled: bool = True
+    use_llm_matching: bool = True
+    providers: dict[str, APIDataProviderConfig] = field(default_factory=lambda: {
+        "open_meteo": APIDataProviderConfig(enabled=True),
+        "coinmarketcap": APIDataProviderConfig(enabled=False),
+        "binance": APIDataProviderConfig(enabled=True),
+    })
+
+
+@dataclass
 class PANSearchConfig:
     """Configuration for PAN (ENCOMPASS-style) collector search."""
     search_algo: str = "beam"          # "bon_global" | "bon_local" | "beam"
@@ -125,6 +147,7 @@ class RuntimeConfig:
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     serper: SerperConfig = field(default_factory=SerperConfig)
     pan: PANSearchConfig = field(default_factory=PANSearchConfig)
+    api_data: APIDataConfig = field(default_factory=APIDataConfig)
     proxy: Optional[str] = None  # e.g., "http://user:pass@host:port"
     extra: dict[str, Any] = field(default_factory=dict)
     
@@ -143,6 +166,7 @@ class RuntimeConfig:
         - COURNOT_DEBUG: Enable debug mode (true/false)
         - COURNOT_HTTP_PROXY: HTTP proxy URL
         - SERPER_API_KEY: Serper API key for search
+        - CMC_PRO_API_KEY: CoinMarketCap API key for crypto data
         """
         overrides: dict[str, Any] = {}
 
@@ -167,6 +191,13 @@ class RuntimeConfig:
         # Serper API
         if os.getenv("SERPER_API_KEY"):
             overrides.setdefault("serper", {})["api_key"] = os.getenv("SERPER_API_KEY")
+
+        # CoinMarketCap API key
+        if os.getenv("CMC_PRO_API_KEY"):
+            overrides.setdefault("api_data", {}).setdefault("providers", {}).setdefault(
+                "coinmarketcap", {}
+            )["api_key"] = os.getenv("CMC_PRO_API_KEY")
+            overrides["api_data"]["providers"]["coinmarketcap"]["enabled"] = True
 
         # Proxy
         if os.getenv("COURNOT_HTTP_PROXY"):
@@ -217,6 +248,24 @@ class RuntimeConfig:
         pipeline = PipelineConfig(**pipeline_data) if pipeline_data else PipelineConfig()
         pan = PANSearchConfig(**pan_data) if pan_data else PANSearchConfig()
 
+        # Parse api_data config
+        api_data_raw = data.get("api_data", {})
+        if api_data_raw:
+            providers_raw = api_data_raw.get("providers", {})
+            providers: dict[str, APIDataProviderConfig] = {}
+            for pid, pcfg in providers_raw.items():
+                if isinstance(pcfg, dict):
+                    providers[pid] = APIDataProviderConfig(**pcfg)
+                else:
+                    providers[pid] = pcfg
+            api_data = APIDataConfig(
+                enabled=api_data_raw.get("enabled", True),
+                use_llm_matching=api_data_raw.get("use_llm_matching", True),
+                providers=providers if providers else APIDataConfig().providers,
+            )
+        else:
+            api_data = APIDataConfig()
+
         # Parse agents config
         agents = AgentsConfig()
         if agents_data:
@@ -234,6 +283,7 @@ class RuntimeConfig:
             pipeline=pipeline,
             serper=serper,
             pan=pan,
+            api_data=api_data,
             proxy=data.get("proxy"),
             extra=data.get("extra", {}),
         )
@@ -266,6 +316,22 @@ class RuntimeConfig:
         if "serper" in overrides:
             for key, value in overrides["serper"].items():
                 setattr(new_config.serper, key, value)
+
+        # API data overrides
+        if "api_data" in overrides:
+            ad = overrides["api_data"]
+            if "enabled" in ad:
+                new_config.api_data.enabled = ad["enabled"]
+            if "use_llm_matching" in ad:
+                new_config.api_data.use_llm_matching = ad["use_llm_matching"]
+            for pid, pcfg in ad.get("providers", {}).items():
+                if isinstance(pcfg, dict):
+                    existing = new_config.api_data.providers.get(
+                        pid, APIDataProviderConfig()
+                    )
+                    for k, v in pcfg.items():
+                        setattr(existing, k, v)
+                    new_config.api_data.providers[pid] = existing
 
         # Proxy override
         if "proxy" in overrides:
@@ -302,6 +368,19 @@ class RuntimeConfig:
                 "beam_width": self.pan.beam_width,
                 "max_expansions": self.pan.max_expansions,
                 "seed": self.pan.seed,
+            },
+            "api_data": {
+                "enabled": self.api_data.enabled,
+                "use_llm_matching": self.api_data.use_llm_matching,
+                "providers": {
+                    pid: {
+                        "enabled": pcfg.enabled,
+                        "api_key": pcfg.api_key,
+                        "base_url": pcfg.base_url,
+                        "timeout": pcfg.timeout,
+                    }
+                    for pid, pcfg in self.api_data.providers.items()
+                },
             },
             "extra": self.extra,
         }

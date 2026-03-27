@@ -29,6 +29,8 @@ from .pan_runtime import SearchAlgo, SearchConfig
 from .gemini_grounded_agent import CollectorOpenSearch
 from .source_pinned_agent import CollectorSitePinned
 from .crp_agent import CollectorCRP
+from .api_data_agent import CollectorAPIData
+from .browserless_agent import CollectorBrowserless
 
 from .engine import CollectionEngine
 
@@ -52,6 +54,8 @@ __all__ = [
     "CollectorOpenSearch",
     "CollectorSitePinned",
     "CollectorCRP",
+    "CollectorAPIData",
+    "CollectorBrowserless",
     # PAN config / runtime
     "PANCollectorConfig",
     "SearchAlgo",
